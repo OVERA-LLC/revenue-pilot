@@ -1,0 +1,48 @@
+{
+  "name": "revenue-pilot",
+  "productName": "Revenue Pilot",
+  "version": "1.0.0",
+  "description": "Revenue Pilot Desktop App",
+  "main": "main.js",
+  "private": true,
+
+  "scripts": {
+    "start": "electron .",
+    "server": "node server.js",
+    "dist": "electron-builder"
+  },
+
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+
+  "devDependencies": {
+    "electron": "^37.10.3",
+    "electron-builder": "^26.0.12"
+  },
+
+  "build": {
+    "appId": "com.overa.revenuepilot",
+    "productName": "Revenue Pilot",
+
+    "directories": {
+      "output": "dist"
+    },
+
+    "files": [
+      "**/*",
+      "!dist/*"
+    ],
+
+    "win": {
+      "target": "nsis"
+    },
+
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
