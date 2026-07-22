@@ -6,7 +6,7 @@
 ## 構成
 
 ```
-booking-curve-backend/
+revenue-pilot-app/
 ├── server.js         ← APIサーバー本体(データの保存・取得)
 ├── package.json
 ├── public/
@@ -23,8 +23,9 @@ Excelの読み込み・パース処理は**これまで通りブラウザ側**�
 1. Node.js が入っていない場合は、まず [nodejs.org](https://nodejs.org/ja) から「推奨版(LTS)」をインストール(1回だけ)
 2. このフォルダの中の **`start.bat`** をダブルクリック
    - 初回は自動でセットアップが始まります(少し時間がかかります)
+   - 併せて、ロゴ入りのデスクトップショートカット「Revenue Pilot」も自動で作成されます
    - 完了すると自動でブラウザが開きます
-3. 次回からは `start.bat` をダブルクリックするだけで起動します
+3. 次回からはデスクトップにできた **「Revenue Pilot」ショートカット**をダブルクリックするだけで起動します
 
 黒い画面(コマンド画面)が開いたままになりますが、これはサーバーが起動している間ずっと表示されているものです。**この画面を閉じると、他の人からもアクセスできなくなる**のでそのままにしておいてください。使い終わったら閉じてOKです。
 
@@ -37,7 +38,7 @@ Excelの読み込み・パース処理は**これまで通りブラウザ側**�
 
 
 ```bash
-cd booking-curve-backend
+cd revenue-pilot-app
 npm install
 npm start
 ```
@@ -50,7 +51,7 @@ npm start
 
 ```bash
 npm install -g pm2
-pm2 start server.js --name booking-curve
+pm2 start server.js --name revenue-pilot
 pm2 save
 pm2 startup   # 表示されるコマンドを実行するとOS起動時に自動起動
 ```
@@ -75,7 +76,16 @@ BOOKING_CURVE_KEY="好きな合言葉" npm start
 
 この場合、`public/index.html` 内のAPI呼び出し(`apiGet`/`apiPost`/`apiDelete`)に `x-api-key` ヘッダーを付ける必要があります。有効にする場合はお知らせください、フロント側も合わせて修正します。
 
+## アイコンについて
+
+ブラウザタブのアイコン(favicon)は、いただいたロゴ画像から自動的に設定済みです。ブラウザで開くと反映されます。
+
+**デスクトップのアイコン付きショートカットも自動作成されます**: 新しいPCで初めて `start.bat` を実行すると(＝インストール時)、自動でデスクトップに「Revenue Pilot」というロゴ入りショートカットが作られます。2回目以降はそのショートカットから起動できます(`start.bat`を直接使い続けても問題ありません)。
+
+もしショートカットを手動で作り直したい場合は、`create-desktop-shortcut.bat` を単体でダブルクリックしてください。
+
 ## トラブルシューティング
+
 
 ### 「npm : このシステムではスクリプトの実行が無効になっているため…」というエラーが出る
 

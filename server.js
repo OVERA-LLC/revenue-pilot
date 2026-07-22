@@ -94,7 +94,17 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 // ---- static frontend ----
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.listen(PORT, () => {
-  console.log(`Revenue Pilot server running: http://localhost:${PORT}`);
-  if (API_KEY) console.log('API key auth is ENABLED for /api routes.');
-});
+function startServer() {
+  const server = app.listen(PORT, () => {
+    console.log(`Revenue Pilot server running: http://localhost:${PORT}`);
+    if (API_KEY) console.log('API key auth is ENABLED for /api routes.');
+  });
+  return server;
+}
+
+module.exports = startServer;
+
+// "node server.js" で直接実行したときは、そのまま起動する
+if (require.main === module) {
+  startServer();
+}

@@ -33,6 +33,12 @@ if not exist "node_modules" (
   echo.
 )
 
+REM 初回起動時、このPCのデスクトップにまだショートカットが無ければ自動作成する
+if not exist "%USERPROFILE%\Desktop\Revenue Pilot.lnk" (
+  echo デスクトップにアイコン付きショートカットを作成しています…
+  cscript //nologo "%~dp0create-shortcut.vbs" >nul
+)
+
 echo サーバーを起動します。このウィンドウは閉じずにそのままにしてください。
 echo (このウィンドウを閉じると、他の人からも使えなくなります)
 echo.

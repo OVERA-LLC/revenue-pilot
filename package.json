@@ -5,39 +5,33 @@
   "description": "Revenue Pilot Desktop App",
   "main": "main.js",
   "private": true,
-
   "scripts": {
     "start": "electron .",
     "server": "node server.js",
     "dist": "electron-builder"
   },
-
   "dependencies": {
+    "better-sqlite3": "^13.0.1",
+    "electron-updater": "^6.8.9",
     "express": "^4.19.2"
   },
-
   "devDependencies": {
     "electron": "^37.10.3",
     "electron-builder": "^26.0.12"
   },
-
   "build": {
     "appId": "com.overa.revenuepilot",
     "productName": "Revenue Pilot",
-
     "directories": {
       "output": "dist"
     },
-
     "files": [
       "**/*",
       "!dist/*"
     ],
-
     "win": {
       "target": "nsis"
     },
-
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
