@@ -145,8 +145,19 @@ app.delete('/api/csv/incoming/:filename', allowCors, (req, res) => {
 // ---- static frontend ----
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.listen(PORT, () => {
-  console.log(`Revenue Pilot server running: http://localhost:${PORT}`);
-  console.log(`Data directory: ${DATA_DIR}`);
-  if (API_KEY) console.log('API key auth is ENABLED for /api routes.');
-});
+function startServer() {
+  const server = app.listen(PORT, () => {
+    console.log(`Revenue Pilot server running: http://localhost:${PORT}`);
+    console.log(`Data directory: ${DATA_DIR}`);
+    if (API_KEY) console.log('API key auth is ENABLED for /api routes.');
+  });
+  return server;
+}
+
+module.exports = startServer;
+
+// "node server.js" で直接実行した時や、main.jsが関数として呼ばずrequireするだけの場合でも
+// そのまま起動できるように、自分自身がエントリポイントとして呼ばれた時は即座に起動する。
+if (require.main === module) {
+  startServer();
+}
