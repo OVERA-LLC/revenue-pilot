@@ -100,9 +100,9 @@
   .cell .d{ font-size:10.5px; font-weight:700; }
   .cell .rooms{ font-size:14px; font-weight:800; margin-top:4px; }
   .cell .diff{ font-size:9px; margin-top:1px; font-weight:600; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:clip; }
-  .diff.up{ color:#8A4A52; }
-  .diff.down{ color:var(--blue); }
-  .diff.flat{ color:var(--ink-soft); }
+  .diff.up{ color:#000; }
+  .diff.down{ color:#000; }
+  .diff.flat{ color:#000; }
 
   .curve-title{ font-size:18px; font-weight:700; margin-bottom:2px; }
   .curve-sub{ font-size:12px; color:var(--ink-soft); margin-bottom:14px; }
@@ -139,7 +139,6 @@
     </div>
   </div>
   <div class="row" style="align-items:center; gap:14px;">
-    <button class="ghost" id="refreshBtn" type="button">🔄 最新を取得</button>
     <div class="headline-note" id="capNote"></div>
   </div>
 </header>
@@ -167,6 +166,7 @@
           <input type="number" id="capacity" style="width:80px;">
         </div>
         <button id="loadBtn">取り込む</button>
+        <button class="ghost" id="checkIncomingBtn" type="button">最新情報取得</button>
         <button class="ghost" id="clearBtn" type="button">保存データを全消去</button>
       </div>
       <div class="status" id="status"></div>
@@ -324,13 +324,12 @@
 
 <script>
 const COLS = ['曜日','日','ランク','室数','人数合計','大人','子供','室料','稼働率','DOR','ADR','RevPAR','売止'];
-const state = { allData:{}, settings:{capacity:68}, curMonth:null, curYear:null, curStayISO:null };
+const state = { allData:{}, settings:{capacity:68}, settingsLoaded:false, curMonth:null, curYear:null, curStayISO:null };
 let charts = [];
 
 function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
 document.getElementById('snapDate').value = todayISO();
 document.getElementById('baseYear').value = new Date().getFullYear();
-document.getElementById('capacity').value = 68;
 
 function setStatus(msg, cls){
   const el = document.getElementById('status');
@@ -364,6 +363,7 @@ async function loadAll(){
   const savedSettings = await apiGet('/settings');
   if(savedSettings && savedSettings.capacity) state.settings = savedSettings;
   document.getElementById('capacity').value = state.settings.capacity || 68;
+  state.settingsLoaded = true;
   updateCapNote();
 }
 
@@ -625,7 +625,6 @@ function parseCSVReservations(csvText){
 
 document.getElementById('loadBtn').addEventListener('click', async ()=>{
   const fileEl = document.getElementById('fileInput');
-  const capacity = parseInt(document.getElementById('capacity').value,10)||68;
 
   if(!fileEl.files.length){ setStatus('ファイルを選択してください', 'err'); return; }
   const file = fileEl.files[0];
@@ -638,6 +637,10 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
 
   setStatus('読み込み中…', 'busy');
   try{
+    // make sure the capacity field reflects the real saved value before we read/re-save it,
+    // otherwise a page loaded a moment ago could still show the placeholder default
+    if(!state.settingsLoaded) await loadAll();
+    const capacity = parseInt(document.getElementById('capacity').value,10) || state.settings.capacity || 68;
     state.settings.capacity = capacity;
 
     let result;
@@ -694,6 +697,50 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
   }
 });
 
+// ---------- pick up CSVs posted directly by the Lincoln bookmarklet (bypassing manual download/upload) ----------
+async function checkIncomingCSVs(){
+  setStatus('保留中のCSVを確認中…', 'busy');
+  try{
+    const listRes = await apiGet('/csv/incoming');
+    const files = listRes.files || [];
+
+    let totalPoints = 0;
+    const totalDates = new Set();
+    for(const filename of files){
+      const textRes = await fetch(API_BASE + '/csv/incoming/' + encodeURIComponent(filename));
+      if(!textRes.ok) continue;
+      const csvText = await textRes.text();
+      const result = parseCSVReservations(csvText);
+      totalPoints += result.points;
+      result.stayDates.forEach(d=>totalDates.add(d));
+      if(result.flatPoints.length) await pushPoints(result.flatPoints);
+      await fetch(API_BASE + '/csv/incoming/' + encodeURIComponent(filename), {method:'DELETE'});
+    }
+
+    // always refresh from the server too, whether or not any pending CSVs were found,
+    // so this same action also works as a general "get latest info" button
+    await loadAll();
+    renderCalendar();
+    populateCurveDateSelect();
+    populateOverlayMonthSelect();
+    populateMrMonthSelect(); renderMonthlyDayCurve();
+    renderMonthlyReport();
+    renderOverlayCurve();
+    if(state.curStayISO) renderCurve(state.curStayISO);
+
+    if(files.length){
+      setStatus(`保留CSVを${files.length}件取り込みました(${totalDates.size}日分、${totalPoints}件のスナップショット)。`, 'ok');
+    } else {
+      setStatus('最新データを取得しました(保留中のCSVはありませんでした)。', 'ok');
+    }
+  }catch(e){
+    console.error(e);
+    setStatus('取得に失敗しました: ' + e.message, 'err');
+  }
+}
+document.getElementById('checkIncomingBtn').addEventListener('click', checkIncomingCSVs);
+
+
 document.getElementById('clearBtn').addEventListener('click', async ()=>{
   if(!confirm('サーバー上の全てのブッキングカーブデータを削除します(他の利用者の分も含みます)。よろしいですか？')) return;
   try{
@@ -719,23 +766,6 @@ document.querySelectorAll('.collapsible-head').forEach(head=>{
 });
 // start collapsed
 document.querySelectorAll('.collapsible').forEach(c=>c.classList.add('collapsed'));
-
-document.getElementById('refreshBtn')?.addEventListener('click', async ()=>{
-  setStatus('最新データを取得中…', 'busy');
-  try{
-    await loadAll();
-    renderCalendar();
-    populateCurveDateSelect();
-    populateOverlayMonthSelect();
-    populateMrMonthSelect(); renderMonthlyDayCurve();
-    renderMonthlyReport();
-    renderOverlayCurve();
-    if(state.curStayISO) renderCurve(state.curStayISO);
-    setStatus('最新データを取得しました。', 'ok');
-  }catch(e){
-    setStatus('取得に失敗しました: ' + e.message, 'err');
-  }
-});
 
 // ---------- tabs ----------
 // (tabs removed — calendar and booking curve are shown together on one page)
@@ -1509,10 +1539,13 @@ function renderCalendar(){
           return `<div class="diff ${cls}" style="font-size:9px; white-space:nowrap;">${prefix}${txt}</div>`;
         };
         if(state.calDiffWindow==='both'){
-          diffHtml += addLine(diff1, '室', '1日 ', true);
-          diffHtml += addLine(salesDiff1, '円', '1日 ', true);
-          diffHtml += addLine(diff7, '室', '7日 ', true);
-          diffHtml += addLine(salesDiff7, '円', '7日 ', true);
+          const vals = [diff1, salesDiff1, diff7, salesDiff7];
+          const allZeroOrNull = vals.every(v => v==null || v===0);
+          const showZero = !allZeroOrNull; // only show 0-value lines when something else in the set is non-zero
+          diffHtml += addLine(diff1, '室', '1日 ', showZero);
+          diffHtml += addLine(salesDiff1, '円', '1日 ', showZero);
+          diffHtml += addLine(diff7, '室', '7日 ', showZero);
+          diffHtml += addLine(salesDiff7, '円', '7日 ', showZero);
         } else {
           diffHtml += addLine(diff, '室', '', false);
           diffHtml += addLine(salesDiff, '円', '', false);
@@ -1755,6 +1788,7 @@ function makeChart(canvasId, labels, data, series, color, unit, capLine, compare
   } else {
     setStatus('サーバーに接続しました。まだデータがありません。', 'ok');
   }
+  checkIncomingCSVs(); // pick up anything the Lincoln bookmarklet posted while the app was closed
 })();
 </script>
 </body>
