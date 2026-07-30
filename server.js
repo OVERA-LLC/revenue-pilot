@@ -155,9 +155,3 @@ function startServer() {
 }
 
 module.exports = startServer;
-
-// "node server.js" で直接実行した時や、main.jsが関数として呼ばずrequireするだけの場合でも
-// そのまま起動できるように、自分自身がエントリポイントとして呼ばれた時は即座に起動する。
-if (require.main === module) {
-  startServer();
-}
