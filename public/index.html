@@ -358,7 +358,10 @@ async function apiDelete(pathSuffix){
 }
 
 // Pull the latest full dataset from the server (picks up other users' uploads too).
+let pendingSettingsSave = Promise.resolve();
+
 async function loadAll(){
+  await pendingSettingsSave; // never read settings back while a save is still in flight
   state.allData = await apiGet('/data');
   const savedSettings = await apiGet('/settings');
   if(savedSettings && savedSettings.capacity) state.settings = savedSettings;
@@ -379,6 +382,18 @@ async function saveSettings(){
 function updateCapNote(){
   document.getElementById('capNote').textContent = '総客室数: ' + (state.settings.capacity||'-') + '室';
 }
+
+// Editing the 総客室数 field directly (without running an import) should also take effect
+// immediately: update the header note right away, then persist it to the server.
+document.getElementById('capacity').addEventListener('change', ()=>{
+  const v = parseInt(document.getElementById('capacity').value, 10);
+  if(!v || v<=0) return;
+  state.settings.capacity = v;
+  updateCapNote();
+  pendingSettingsSave = saveSettings()
+    .then(()=>{ renderCalendar(); })
+    .catch(e=>console.error('capacity save failed', e));
+});
 
 // ---------- excel parsing ----------
 function dateISO(y,m,d){
