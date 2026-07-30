@@ -1,4 +1,4 @@
-// Booking Curve backend server
+// Revenue Pilot (by OVERA) — backend server
 // - Serves the frontend (public/index.html) as static files
 // - Stores all booking-curve data in a JSON file on the server (data/all_data.json)
 //   so every device/user hitting this server sees the SAME data.
@@ -91,20 +91,50 @@ app.post('/api/settings', async (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+// ---- CSV intake (for the Lincoln bookmarklet to POST directly, bypassing manual download/upload) ----
+// CORS is enabled ONLY on these routes since the bookmarklet runs on a different origin (the Lincoln
+// site itself). The raw CSV is just staged on disk here; the frontend picks it up, parses it with the
+// existing browser-side CSV parser, and merges it in — no server-side duplicate of the parsing logic.
+function allowCors(req, res, next) {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+}
+
+const INCOMING_DIR = path.join(DATA_DIR, 'incoming');
+if (!fs.existsSync(INCOMING_DIR)) fs.mkdirSync(INCOMING_DIR, { recursive: true });
+
+app.options('/api/csv/incoming', allowCors);
+app.post('/api/csv/incoming', allowCors, express.text({ type: '*/*', limit: '20mb' }), (req, res) => {
+  const filename = `csv_${Date.now()}.csv`;
+  fs.writeFileSync(path.join(INCOMING_DIR, filename), req.body, 'utf-8');
+  res.json({ ok: true, filename });
+});
+
+app.get('/api/csv/incoming', allowCors, (req, res) => {
+  const files = fs.readdirSync(INCOMING_DIR).filter(f => f.endsWith('.csv')).sort();
+  res.json({ files });
+});
+
+app.options('/api/csv/incoming/:filename', allowCors);
+app.get('/api/csv/incoming/:filename', allowCors, (req, res) => {
+  const p = path.join(INCOMING_DIR, req.params.filename);
+  if (!fs.existsSync(p)) return res.status(404).json({ error: 'not found' });
+  res.type('text/plain; charset=utf-8').send(fs.readFileSync(p, 'utf-8'));
+});
+
+app.delete('/api/csv/incoming/:filename', allowCors, (req, res) => {
+  const p = path.join(INCOMING_DIR, req.params.filename);
+  if (fs.existsSync(p)) fs.unlinkSync(p);
+  res.json({ ok: true });
+});
+
 // ---- static frontend ----
 app.use(express.static(path.join(__dirname, 'public')));
 
-function startServer() {
-  const server = app.listen(PORT, () => {
-    console.log(`Revenue Pilot server running: http://localhost:${PORT}`);
-    if (API_KEY) console.log('API key auth is ENABLED for /api routes.');
-  });
-  return server;
-}
-
-module.exports = startServer;
-
-// "node server.js" で直接実行したときは、そのまま起動する
-if (require.main === module) {
-  startServer();
-}
+app.listen(PORT, () => {
+  console.log(`Revenue Pilot server running: http://localhost:${PORT}`);
+  if (API_KEY) console.log('API key auth is ENABLED for /api routes.');
+});
