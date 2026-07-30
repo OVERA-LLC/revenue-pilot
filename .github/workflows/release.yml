@@ -6,6 +6,12 @@ on:
     tags:
       - 'v*'
 
+# GitHub Releaseを作成・アップロードするために必須(組織所有のリポジトリでは
+# リポジトリ設定の「Read and write permissions」だけでは不十分な場合があるため、
+# ここでも明示的に権限を宣言しておく)
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     runs-on: windows-latest
