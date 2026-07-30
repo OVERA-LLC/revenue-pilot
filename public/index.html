@@ -231,6 +231,10 @@
             <button class="ghost diff-toggle" id="mr3MetricRooms" type="button">販売客室数</button>
           </div>
         </div>
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+          <input type="checkbox" id="mr3ShowGrossToggle" style="width:auto;">
+          <span style="font-size:11.5px; color:var(--ink-soft);">今年度の総需要(キャンセル込み)も表示</span>
+        </label>
       </div>
       <div class="curve-sub" id="mrChartSub"></div>
       <div class="chart-block chart-block-primary"><canvas id="mrChart"></canvas></div>
@@ -307,10 +311,6 @@
           </select>
         </div>
         <button class="ghost" id="genCurveBtn" type="button">生成</button>
-        <label style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-          <input type="checkbox" id="showGrossToggle" style="width:auto;">
-          <span style="font-size:11.5px; color:var(--ink-soft);">総需要(キャンセル込み)も表示</span>
-        </label>
       </div>
       <div class="curve-title" id="curveTitle">日付を選択してください</div>
       <div class="curve-sub" id="curveSub"></div>
@@ -328,7 +328,7 @@
 
 <script>
 const COLS = ['曜日','日','ランク','室数','人数合計','大人','子供','室料','稼働率','DOR','ADR','RevPAR','売止'];
-const state = { allData:{}, allDataGross:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null, showGrossDemand:false };
+const state = { allData:{}, allDataGross:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null };
 let charts = [];
 
 function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
@@ -1169,6 +1169,7 @@ function monthTotalsLatest(y,m){
 }
 
 state.mr3Metric = 'sales'; // 'sales' | 'rooms' — for the 3-period 6-month comparison chart
+state.mr3ShowGross = false;
 let mrChart = null;
 
 function mrSet3Metric(m){
@@ -1179,6 +1180,10 @@ function mrSet3Metric(m){
 }
 document.getElementById('mr3MetricSales').addEventListener('click', ()=>mrSet3Metric('sales'));
 document.getElementById('mr3MetricRooms').addEventListener('click', ()=>mrSet3Metric('rooms'));
+document.getElementById('mr3ShowGrossToggle').addEventListener('change', (e)=>{
+  state.mr3ShowGross = e.target.checked;
+  renderMonthlyReport();
+});
 
 function renderMonthlyReport(){
   const sel = document.getElementById('mrMonthSelect');
@@ -1235,12 +1240,23 @@ function renderMonthlyReport(){
     if(!keys.length) return null;
     return rec[keys[keys.length-1]][key];
   }
+  function dayActualGross(dateISO, key){
+    const rec = state.allDataGross && state.allDataGross[dateISO];
+    if(!rec) return null;
+    const keys = Object.keys(rec).sort();
+    if(!keys.length) return null;
+    return rec[keys[keys.length-1]][key];
+  }
   function seriesFor(group){
     return dayListFor(group).map(iso=>({ date: iso, value: dayActual(iso, metricKey) }));
+  }
+  function seriesForGross(group){
+    return dayListFor(group).map(iso=>({ date: iso, value: dayActualGross(iso, metricKey) }));
   }
   const dataA = seriesFor(groupA);
   const dataB = seriesFor(groupB);
   const dataC = seriesFor(groupC);
+  const dataAGross = state.mr3ShowGross ? seriesForGross(groupA) : null;
   const maxLen = Math.max(dataA.length, dataB.length, dataC.length);
   const labels = Array.from({length:maxLen}, (_,i)=>{
     const ref = dataA[i] || dataB[i] || dataC[i];
@@ -1262,6 +1278,7 @@ function renderMonthlyReport(){
   const dataAArr = toChartData(dataA);
   const dataBArr = toChartData(dataB);
   const dataCArr = toChartData(dataC);
+  const dataAGrossArr = dataAGross ? toChartData(dataAGross) : null;
   // pacing forecast: extend 今年度(A) forward using 前年度(B)'s shape, for any position A has no data yet
   const lastKnownIdx = (()=>{ let idx=-1; dataAArr.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
   const lastKnownVal = lastKnownIdx>=0 ? dataAArr[lastKnownIdx] : 0;
@@ -1279,16 +1296,21 @@ function renderMonthlyReport(){
   const labelB = groupB[0] ? `${groupB[0].y}年` : '前年度';
   const labelA = groupA[0] ? `${groupA[0].y}年` : '今年度';
 
+  const datasets = [
+    { label:labelC, data:dataCArr, borderColor:'#3E5C74', backgroundColor:'transparent', pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true },
+    { label:labelB, data:dataBArr, borderColor:'#9096A3', backgroundColor:'transparent', pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true },
+    { label:labelA, data:dataAArr, borderColor:'#4A7A6B', backgroundColor:'#4A7A6B15', pointRadius:0, borderWidth:2, tension:0.1, spanGaps:true, fill:true },
+    { label:'着地予測', data:forecastArr, borderColor:'#B08D57', backgroundColor:'transparent', borderDash:[5,4], pointRadius:0, tension:0.1, spanGaps:true }
+  ];
+  if(dataAGrossArr){
+    datasets.push({ label:`${labelA} 総需要(キャンセル込み)`, data:dataAGrossArr, borderColor:'#8A4A52', backgroundColor:'transparent', borderDash:[2,2], pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true });
+  }
+
   mrChart = new Chart(ctx, {
     type:'line',
     data:{
       labels,
-      datasets:[
-        { label:labelC, data:dataCArr, borderColor:'#3E5C74', backgroundColor:'transparent', pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true },
-        { label:labelB, data:dataBArr, borderColor:'#9096A3', backgroundColor:'transparent', pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true },
-        { label:labelA, data:dataAArr, borderColor:'#4A7A6B', backgroundColor:'#4A7A6B15', pointRadius:0, borderWidth:2, tension:0.1, spanGaps:true, fill:true },
-        { label:'着地予測', data:forecastArr, borderColor:'#B08D57', backgroundColor:'transparent', borderDash:[5,4], pointRadius:0, tension:0.1, spanGaps:true }
-      ]
+      datasets
     },
     options:{
       responsive:true, maintainAspectRatio:true, aspectRatio:2.2,
@@ -1300,6 +1322,13 @@ function renderMonthlyReport(){
             label:(c)=>{
               if(c.datasetIndex===3){
                 return c.formattedValue==null ? `${c.dataset.label}: -` : `${c.dataset.label}: ${unit==='円'?'¥':''}${Number(c.raw).toLocaleString()}${unit==='室'?'室':''}`;
+              }
+              if(c.datasetIndex===4 && dataAGross){
+                const p = dataAGross[c.dataIndex];
+                if(!p || p.value==null) return `${c.dataset.label}: -`;
+                const [yy,mm,dd] = p.date.split('-');
+                const label = `${yy}年${Number(mm)}月${Number(dd)}日`;
+                return unit==='円' ? `${c.dataset.label}(${label}): ¥${Number(p.value).toLocaleString()}` : `${c.dataset.label}(${label}): ${p.value}室`;
               }
               const series = c.datasetIndex===0?dataC:c.datasetIndex===1?dataB:dataA;
               const p = series[c.dataIndex];
@@ -1444,10 +1473,6 @@ document.getElementById('genCurveBtn').addEventListener('click', ()=>{
 });
 document.getElementById('curveDateSelect').addEventListener('change', (e)=>{
   if(e.target.value) openCurve(e.target.value, null);
-});
-document.getElementById('showGrossToggle').addEventListener('change', (e)=>{
-  state.showGrossDemand = e.target.checked;
-  if(state.curStayISO) renderCurve(state.curStayISO);
 });
 
 // ---------- calendar ----------
@@ -1775,22 +1800,8 @@ function renderCurve(stayISO){
   const compareSales = compareSeries ? {data: compareSeries.map(s=>s.hasData?s.sales:null), label:`前年同曜日(${compareLabel})`} : null;
   const compareAdr = compareSeries ? {data: compareSeries.map(s=>s.hasData?s.adr:null), label:`前年同曜日(${compareLabel})`} : null;
 
-  // 総需要(キャンセル込み): same checkpoint machinery, reading from the gross dataset instead
-  let grossRooms = null, grossSales = null;
-  if(state.showGrossDemand){
-    const grossRec = state.allDataGross && state.allDataGross[stayISO];
-    if(grossRec && Object.keys(grossRec).length){
-      const grossRaw = Object.keys(grossRec).sort().map(sk=>({
-        daysBefore: daysBefore(stayISO, sk), snap:sk, ...grossRec[sk]
-      }));
-      const grossSeries = buildCheckpointSeries(grossRaw);
-      grossRooms = {data: grossSeries.map(s=>s.hasData?s.rooms:null), label:'総需要(キャンセル込み)'};
-      grossSales = {data: grossSeries.map(s=>s.hasData?s.sales:null), label:'総需要(キャンセル込み)'};
-    }
-  }
-
-  charts.push(makeChart('chRooms', labels, series.map(s=>s.hasData?s.rooms:null), series, '#8A4A52', '室', cap, compareRooms, true, grossRooms));
-  charts.push(makeChart('chSales', labels, series.map(s=>s.hasData?s.sales:null), series, '#A8813E', '円', null, compareSales, false, grossSales));
+  charts.push(makeChart('chRooms', labels, series.map(s=>s.hasData?s.rooms:null), series, '#8A4A52', '室', cap, compareRooms, true));
+  charts.push(makeChart('chSales', labels, series.map(s=>s.hasData?s.sales:null), series, '#A8813E', '円', null, compareSales, false));
   charts.push(makeChart('chAdr', labels, series.map(s=>s.hasData?s.adr:null), series, '#3E5C74', '円', null, compareAdr, false));
 }
 
