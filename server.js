@@ -1,7 +1,6 @@
 // Revenue Pilot (by OVERA) — backend server
 // - Serves the frontend (public/index.html) as static files
-// - Stores all booking-curve data in a JSON file on the server (data/all_data.json)
-//   so every device/user hitting this server sees the SAME data.
+// - Stores all booking-curve data in a JSON file so every device/user hitting this server sees the SAME data.
 // - No native modules (no SQLite build step) so it runs anywhere Node.js runs.
 //
 // Run:   npm install && npm start
@@ -14,7 +13,19 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const DATA_DIR = path.join(__dirname, 'data');
+// Data must live in a WRITABLE location. Inside a packaged Electron app, __dirname points into
+// app.asar, which is read-only — writing there throws ENOTDIR/EROFS. When running inside Electron
+// we use the OS's proper per-user app-data folder instead; when run as plain `node server.js`
+// (no Electron), we fall back to a local ./data folder next to this file.
+let baseDir;
+try {
+  const { app: electronApp } = require('electron');
+  baseDir = electronApp.getPath('userData');
+} catch (e) {
+  baseDir = __dirname;
+}
+
+const DATA_DIR = path.join(baseDir, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'all_data.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
@@ -52,7 +63,7 @@ app.get('/api/data', (req, res) => {
   res.json(readJSON(DATA_FILE));
 });
 
-// Merge in new snapshot points from a client-side Excel import.
+// Merge in new snapshot points from a client-side Excel/CSV import.
 // body: { points: [{ stayISO, snapshotISO, rooms, sales, adr, revpar }, ...] }
 app.post('/api/data', async (req, res) => {
   const { points } = req.body || {};
@@ -136,5 +147,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
   console.log(`Revenue Pilot server running: http://localhost:${PORT}`);
+  console.log(`Data directory: ${DATA_DIR}`);
   if (API_KEY) console.log('API key auth is ENABLED for /api routes.');
 });
