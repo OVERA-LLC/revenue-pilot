@@ -284,7 +284,10 @@ const COLS = ['曜日','日','ランク','室数','人数合計','大人','子�
 const state = { allData:{}, allDataGross:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null };
 let charts = [];
 
-function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function todayISO(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 document.getElementById('snapDate').value = todayISO();
 document.getElementById('baseYear').value = new Date().getFullYear();
 
@@ -372,10 +375,21 @@ function dateISO(y,m,d){
   const mm=String(m).padStart(2,'0'), dd=String(d).padStart(2,'0');
   return `${y}-${mm}-${dd}`;
 }
+// Timezone-safe ISO date helpers. IMPORTANT: never mix "new Date(iso+'T00:00:00')" (parsed as
+// LOCAL time) with ".toISOString()" (always UTC) — in any timezone ahead of UTC (e.g. Japan,
+// UTC+9), that combination silently shifts the date back by one day. These helpers instead do
+// all arithmetic in UTC from end to end, so the result never depends on the machine's timezone.
+function isoToUTCDate(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m-1, d));
+}
+function utcDateToISO(dt){
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+}
 function addDaysISO(iso, days){
-  const dt = new Date(iso+'T00:00:00');
-  dt.setDate(dt.getDate()+days);
-  return dt.toISOString().slice(0,10);
+  const dt = isoToUTCDate(iso);
+  dt.setUTCDate(dt.getUTCDate()+days);
+  return utcDateToISO(dt);
 }
 
 function parseWorkbook(wb, snapshotISO, baseYear){
@@ -571,11 +585,11 @@ function parseCSVReservations(csvText){
       if(transitions.length===0) continue;
       const nightSet = new Set();
       transitions.forEach(tr=>{
-        let d = new Date(tr.checkinISO+'T00:00:00');
-        const end = new Date(tr.checkoutISO+'T00:00:00');
+        let d = isoToUTCDate(tr.checkinISO);
+        const end = isoToUTCDate(tr.checkoutISO);
         while(d < end){
-          nightSet.add(d.toISOString().slice(0,10));
-          d.setDate(d.getDate()+1);
+          nightSet.add(utcDateToISO(d));
+          d.setUTCDate(d.getUTCDate()+1);
         }
       });
       nightSet.forEach(n=>{
@@ -606,9 +620,9 @@ function parseCSVReservations(csvText){
             if(tr.atISO <= t) active = tr; else break;
           }
           if(active){
-            const d = new Date(night+'T00:00:00');
-            const ci = new Date(active.checkinISO+'T00:00:00');
-            const co = new Date(active.checkoutISO+'T00:00:00');
+            const d = isoToUTCDate(night);
+            const ci = isoToUTCDate(active.checkinISO);
+            const co = isoToUTCDate(active.checkoutISO);
             if(d>=ci && d<co){
               totalRooms += active.rooms;
               totalSales += active.salesPerNight;
@@ -680,9 +694,9 @@ function parseReservationEvents(events){
       if(transitions.length===0) continue;
       const nightSet = new Set();
       transitions.forEach(tr=>{
-        let d = new Date(tr.checkinISO+'T00:00:00');
-        const end = new Date(tr.checkoutISO+'T00:00:00');
-        while(d < end){ nightSet.add(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+        let d = isoToUTCDate(tr.checkinISO);
+        const end = isoToUTCDate(tr.checkoutISO);
+        while(d < end){ nightSet.add(utcDateToISO(d)); d.setUTCDate(d.getUTCDate()+1); }
       });
       nightSet.forEach(n=>{
         if(!perNight.has(n)) perNight.set(n, []);
@@ -706,9 +720,9 @@ function parseReservationEvents(events){
           let active = null;
           for(const tr of trs){ if(tr.atISO <= t) active = tr; else break; }
           if(active){
-            const d = new Date(night+'T00:00:00');
-            const ci = new Date(active.checkinISO+'T00:00:00');
-            const co = new Date(active.checkoutISO+'T00:00:00');
+            const d = isoToUTCDate(night);
+            const ci = isoToUTCDate(active.checkinISO);
+            const co = isoToUTCDate(active.checkoutISO);
             if(d>=ci && d<co){ totalRooms += active.rooms; totalSales += active.salesPerNight; }
           }
         });
@@ -1307,7 +1321,7 @@ function valueNearDate(stayISO, targetISO){
   if(!keys.length) return null;
   let best=null, bestDist=Infinity;
   keys.forEach(k=>{
-    const dist = Math.abs(new Date(k+'T00:00:00') - new Date(targetISO+'T00:00:00'));
+    const dist = Math.abs(isoToUTCDate(k) - isoToUTCDate(targetISO));
     if(dist<bestDist){ bestDist=dist; best=k; }
   });
   return rec[best];
