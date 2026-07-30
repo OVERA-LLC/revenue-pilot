@@ -1,7 +1,7 @@
 {
   "name": "revenue-pilot",
   "productName": "Revenue Pilot",
-  "version": "koko",
+  "version": "1.2.0",
   "description": "Revenue Pilot Desktop App",
   "main": "main.js",
   "private": true,
