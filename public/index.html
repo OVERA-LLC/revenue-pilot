@@ -636,6 +636,105 @@ function parseCSVReservations(csvText){
   };
 }
 
+// ---------- 予約番号ベースの取込(検索結果ページのスクレイピング由来) ----------
+// Same overall approach as parseCSVReservations (build per-group transitions, index which nights
+// each group covers, merge per night), but grouped by 予約番号 — far more robust than name+checkin,
+// since it can never accidentally merge two different guests who happen to share a name and date.
+// events: [{ resNo, type('予約'|'変更'|'取消'), checkinISO, checkoutISO, nights, rooms, totalPrice, receivedISO(full timestamp, for correct same-day ordering) }]
+function parseReservationEvents(events){
+  const cap = state.settings.capacity || 68;
+  const groups = new Map();
+  events.forEach(ev=>{
+    if(!ev.resNo || !ev.checkinISO || !ev.checkoutISO || !ev.receivedISO || ev.nights<=0) return;
+    if(ev.type!=='予約' && ev.type!=='変更' && ev.type!=='取消') return;
+    if(!groups.has(ev.resNo)) groups.set(ev.resNo, []);
+    groups.get(ev.resNo).push(ev);
+  });
+
+  const groupTransitions = new Map();
+  const groupTransitionsGross = new Map();
+  for(const [resNo, evs] of groups.entries()){
+    evs.sort((a,b)=> a.receivedISO < b.receivedISO ? -1 : a.receivedISO > b.receivedISO ? 1 : 0);
+    const transitions = [];
+    const transitionsGross = [];
+    let lastNonCancel = null;
+    evs.forEach(ev=>{
+      let state_;
+      if(ev.type==='予約' || ev.type==='変更'){
+        state_ = { rooms: ev.rooms, salesPerNight: ev.nights>0 ? ev.totalPrice/ev.nights : 0, checkinISO: ev.checkinISO, checkoutISO: ev.checkoutISO };
+        lastNonCancel = state_;
+        transitionsGross.push({ atISO: ev.receivedISO, ...state_ });
+      } else {
+        state_ = { rooms: 0, salesPerNight: 0, checkinISO: ev.checkinISO, checkoutISO: ev.checkoutISO };
+        if(lastNonCancel) transitionsGross.push({ atISO: ev.receivedISO, ...lastNonCancel });
+      }
+      transitions.push({ atISO: ev.receivedISO, ...state_ });
+    });
+    groupTransitions.set(resNo, transitions);
+    groupTransitionsGross.set(resNo, transitionsGross);
+  }
+
+  function indexPerNight(transitionsMap){
+    const perNight = new Map();
+    for(const [key, transitions] of transitionsMap.entries()){
+      if(transitions.length===0) continue;
+      const nightSet = new Set();
+      transitions.forEach(tr=>{
+        let d = new Date(tr.checkinISO+'T00:00:00');
+        const end = new Date(tr.checkoutISO+'T00:00:00');
+        while(d < end){ nightSet.add(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+      });
+      nightSet.forEach(n=>{
+        if(!perNight.has(n)) perNight.set(n, []);
+        perNight.get(n).push(transitions);
+      });
+    }
+    return perNight;
+  }
+  const perNight = indexPerNight(groupTransitions);
+  const perNightGross = indexPerNight(groupTransitionsGross);
+
+  function mergeNights(perNightMap, targetData){
+    let addedStayDates = new Set(); let addedPoints = 0; let flatPoints = [];
+    for(const [night, transitionLists] of perNightMap.entries()){
+      const timeSet = new Set();
+      transitionLists.forEach(trs => trs.forEach(tr=> timeSet.add(tr.atISO)));
+      const times = [...timeSet].sort();
+      times.forEach(t=>{
+        let totalRooms=0, totalSales=0;
+        transitionLists.forEach(trs=>{
+          let active = null;
+          for(const tr of trs){ if(tr.atISO <= t) active = tr; else break; }
+          if(active){
+            const d = new Date(night+'T00:00:00');
+            const ci = new Date(active.checkinISO+'T00:00:00');
+            const co = new Date(active.checkoutISO+'T00:00:00');
+            if(d>=ci && d<co){ totalRooms += active.rooms; totalSales += active.salesPerNight; }
+          }
+        });
+        const adr = totalRooms>0 ? totalSales/totalRooms : 0;
+        const revpar = cap>0 ? totalSales/cap : 0;
+        // snapshot key: use just the date portion (existing schema is per-day, not per-minute)
+        const snapDate = t.slice(0,10);
+        if(!targetData[night]) targetData[night] = {};
+        targetData[night][snapDate] = { rooms: totalRooms, sales: totalSales, adr, revpar };
+        addedStayDates.add(night); addedPoints++;
+        flatPoints.push({stayISO:night, snapshotISO:snapDate, rooms:totalRooms, sales:totalSales, adr, revpar});
+      });
+    }
+    return { stayDates:[...addedStayDates], points: addedPoints, flatPoints };
+  }
+
+  const netResult = mergeNights(perNight, state.allData);
+  if(!state.allDataGross) state.allDataGross = {};
+  const grossResult = mergeNights(perNightGross, state.allDataGross);
+
+  return {
+    stayDates: netResult.stayDates, points: netResult.points, flatPoints: netResult.flatPoints,
+    flatPointsGross: grossResult.flatPoints
+  };
+}
+
 document.getElementById('loadBtn').addEventListener('click', async ()=>{
   const fileEl = document.getElementById('fileInput');
 
@@ -707,7 +806,7 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
 
 // ---------- pick up CSVs posted directly by the Lincoln bookmarklet (bypassing manual download/upload) ----------
 async function checkIncomingCSVs(){
-  setStatus('保留中のCSVを確認中…', 'busy');
+  setStatus('保留中のデータを確認中…', 'busy');
   try{
     const listRes = await apiGet('/csv/incoming');
     const files = listRes.files || [];
@@ -726,17 +825,37 @@ async function checkIncomingCSVs(){
       await fetch(API_BASE + '/csv/incoming/' + encodeURIComponent(filename), {method:'DELETE'});
     }
 
-    // always refresh from the server too, whether or not any pending CSVs were found,
+    // also pick up any pending 予約番号ベース data (from the Lincoln search-results scrape),
+    // which runs alongside the CSV path rather than replacing it
+    const resListRes = await apiGet('/reservations/incoming');
+    const resFiles = resListRes.files || [];
+    let resTotalPoints = 0;
+    const resTotalDates = new Set();
+    for(const filename of resFiles){
+      const jsonRes = await fetch(API_BASE + '/reservations/incoming/' + encodeURIComponent(filename));
+      if(!jsonRes.ok) continue;
+      const events = await jsonRes.json();
+      const result = parseReservationEvents(events);
+      resTotalPoints += result.points;
+      result.stayDates.forEach(d=>resTotalDates.add(d));
+      if(result.flatPoints.length) await pushPoints(result.flatPoints);
+      if(result.flatPointsGross && result.flatPointsGross.length) await pushPointsGross(result.flatPointsGross);
+      await fetch(API_BASE + '/reservations/incoming/' + encodeURIComponent(filename), {method:'DELETE'});
+    }
+
+    // always refresh from the server too, whether or not any pending data was found,
     // so this same action also works as a general "get latest info" button
     await loadAll();
     renderCalendar();
     populateMrMonthSelect(); renderMonthlyDayCurve();
     renderMonthlyReport();
 
-    if(files.length){
-      setStatus(`保留CSVを${files.length}件取り込みました(${totalDates.size}日分、${totalPoints}件のスナップショット)。`, 'ok');
+    const totalFiles = files.length + resFiles.length;
+    if(totalFiles){
+      const allDates = new Set([...totalDates, ...resTotalDates]);
+      setStatus(`保留データを${totalFiles}件取り込みました(${allDates.size}日分、${totalPoints+resTotalPoints}件のスナップショット)。`, 'ok');
     } else {
-      setStatus('最新データを取得しました(保留中のCSVはありませんでした)。', 'ok');
+      setStatus('最新データを取得しました(保留中のデータはありませんでした)。', 'ok');
     }
   }catch(e){
     console.error(e);

@@ -204,6 +204,42 @@ app.delete('/api/csv/incoming/:filename', allowCors, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- reservation-number intake (richer, more robust alternative to the CSV path: keyed by
+// 予約番号 instead of name+checkin, scraped from the Lincoln search-results screen). Runs
+// alongside the CSV intake above — neither replaces the other. ----
+const INCOMING_RES_DIR = path.join(DATA_DIR, 'incoming_reservations');
+if (!fs.existsSync(INCOMING_RES_DIR)) fs.mkdirSync(INCOMING_RES_DIR, { recursive: true });
+
+app.options('/api/reservations/incoming', allowCors);
+app.post('/api/reservations/incoming', allowCors, express.json({ limit: '20mb' }), (req, res) => {
+  try {
+    const filename = `res_${Date.now()}.json`;
+    fs.writeFileSync(path.join(INCOMING_RES_DIR, filename), JSON.stringify(req.body), 'utf-8');
+    res.json({ ok: true, filename });
+  } catch (err) {
+    console.error('POST /api/reservations/incoming failed:', err);
+    res.status(500).json({ error: 'save failed', message: err.message });
+  }
+});
+
+app.get('/api/reservations/incoming', allowCors, (req, res) => {
+  const files = fs.readdirSync(INCOMING_RES_DIR).filter(f => f.endsWith('.json')).sort();
+  res.json({ files });
+});
+
+app.options('/api/reservations/incoming/:filename', allowCors);
+app.get('/api/reservations/incoming/:filename', allowCors, (req, res) => {
+  const p = path.join(INCOMING_RES_DIR, req.params.filename);
+  if (!fs.existsSync(p)) return res.status(404).json({ error: 'not found' });
+  res.type('application/json; charset=utf-8').send(fs.readFileSync(p, 'utf-8'));
+});
+
+app.delete('/api/reservations/incoming/:filename', allowCors, (req, res) => {
+  const p = path.join(INCOMING_RES_DIR, req.params.filename);
+  if (fs.existsSync(p)) fs.unlinkSync(p);
+  res.json({ ok: true });
+});
+
 // ---- static frontend ----
 // Disable caching entirely for the frontend. Without this, Electron's Chromium engine can keep
 // serving a stale cached copy of index.html/app.js across app UPDATES, since the URL is always
