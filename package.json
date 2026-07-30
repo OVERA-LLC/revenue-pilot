@@ -1,7 +1,7 @@
 {
   "name": "revenue-pilot",
   "productName": "Revenue Pilot",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "description": "Revenue Pilot Desktop App",
   "main": "main.js",
   "private": true,
