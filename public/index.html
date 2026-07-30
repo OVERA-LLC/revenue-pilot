@@ -273,53 +273,6 @@
     </div>
   </div>
 
-  <div class="card collapsible" id="monthAggCard">
-    <h2 class="collapsible-head" data-target="monthAggBody">当月集計(カレンダーと連動) <span class="chev">▾</span></h2>
-    <div class="collapsible-body" id="monthAggBody">
-      <div class="curve-sub" id="monthAggSub"></div>
-      <div class="kpis" id="monthAggKpis"></div>
-      <div id="monthAggCharts"></div>
-      <div id="monthAggEmpty" class="empty-note">カレンダーに表示中の月のデータがまだありません。</div>
-    </div>
-  </div>
-
-  <div class="card collapsible" id="overlayCard">
-    <h2 class="collapsible-head" data-target="overlayBody">月別ブッキングカーブ(前年同月と比較) <span class="chev">▾</span></h2>
-    <div class="collapsible-body" id="overlayBody">
-      <div class="row" style="margin-bottom:10px;">
-        <div>
-          <label>比較する月</label>
-          <select id="overlayMonthSelect" style="min-width:140px;">
-            <option value="">-- 月を選択 --</option>
-          </select>
-        </div>
-      </div>
-      <div class="curve-sub" id="overlaySub">選択した月の「今年」と「前年の同じ月」を、同じ「180〜0日前」の軸に重ねて表示します。ピックアップペースの違いから、平日の室料設定のヒントが見えてきます。</div>
-      <div id="overlayCharts"></div>
-      <div id="overlayEmpty" class="empty-note">月を選択すると比較グラフが表示されます。</div>
-    </div>
-  </div>
-
-  <div class="card collapsible" id="curveCard">
-    <h2 class="collapsible-head" data-target="curveBody">日別ブッキングカーブ(特定の1日を確認) <span class="chev">▾</span></h2>
-    <div class="collapsible-body" id="curveBody">
-      <div class="row" style="margin-bottom:14px;">
-        <div>
-          <label>宿泊日を直接選択(読み込み済みデータ全体から)</label>
-          <select id="curveDateSelect" style="min-width:220px;">
-            <option value="">-- 日付を選択 --</option>
-          </select>
-        </div>
-        <button class="ghost" id="genCurveBtn" type="button">生成</button>
-      </div>
-      <div class="curve-title" id="curveTitle">日付を選択してください</div>
-      <div class="curve-sub" id="curveSub"></div>
-      <div class="kpis" id="curveKpis"></div>
-      <div id="curveCharts"></div>
-      <div id="curveEmpty" class="empty-note">カレンダーの日付をクリックするか、上のセレクターから宿泊日を選ぶと、180日前〜当日のブッキングカーブがここに表示されます。</div>
-    </div>
-  </div>
-
 </main>
 
 <footer style="text-align:center; padding:18px 0 30px; color:#9AA0AC; font-size:11.5px; letter-spacing:.04em;">
@@ -727,11 +680,8 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
       state.curYear=y; state.curMonth=m;
     }
     renderCalendar();
-    populateCurveDateSelect();
-    populateOverlayMonthSelect();
     populateMrMonthSelect(); renderMonthlyDayCurve();
     renderMonthlyReport();
-    renderOverlayCurve();
     setStatus(`取込完了: ${result.stayDates.length}日分、${result.points}件のスナップショットを画面に反映しました。サーバーに送信中…`, 'ok');
 
     // send only the new points (never the whole local copy) so concurrent uploads
@@ -742,11 +692,8 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
       await saveSettings();
       await loadAll(); // refresh from server, picks up anything other users just added too
       renderCalendar();
-      populateCurveDateSelect();
-      populateOverlayMonthSelect();
       populateMrMonthSelect(); renderMonthlyDayCurve();
       renderMonthlyReport();
-      renderOverlayCurve();
       setStatus(`取込完了: ${result.stayDates.length}日分、${result.points}件のスナップショットをサーバーに保存し、全員分の最新データを反映しました。`, 'ok');
     }catch(storageErr){
       console.error('server save failed', storageErr);
@@ -783,12 +730,8 @@ async function checkIncomingCSVs(){
     // so this same action also works as a general "get latest info" button
     await loadAll();
     renderCalendar();
-    populateCurveDateSelect();
-    populateOverlayMonthSelect();
     populateMrMonthSelect(); renderMonthlyDayCurve();
     renderMonthlyReport();
-    renderOverlayCurve();
-    if(state.curStayISO) renderCurve(state.curStayISO);
 
     if(files.length){
       setStatus(`保留CSVを${files.length}件取り込みました(${totalDates.size}日分、${totalPoints}件のスナップショット)。`, 'ok');
@@ -810,11 +753,8 @@ document.getElementById('clearBtn').addEventListener('click', async ()=>{
     await apiDelete('/data-gross');
     await loadAll();
     renderCalendar();
-    populateCurveDateSelect();
-    populateOverlayMonthSelect();
     populateMrMonthSelect(); renderMonthlyDayCurve();
     renderMonthlyReport();
-    renderOverlayCurve();
     setStatus('全データを削除しました。', 'ok');
   }catch(e){
     setStatus('削除に失敗しました: ' + e.message, 'err');
@@ -832,221 +772,6 @@ document.querySelectorAll('.collapsible').forEach(c=>c.classList.add('collapsed'
 
 // ---------- tabs ----------
 // (tabs removed — calendar and booking curve are shown together on one page)
-
-// ---------- aggregate booking curve (generic: works for "one month" or "all loaded dates") ----------
-// Sums the nearest-neighbor checkpoint value across a given list of stay dates,
-// giving one overall pickup-pace curve for that set of dates instead of a single day.
-function computeAggregateFromDates(stayDates){
-  if(stayDates.length===0) return null;
-
-  const totals = CHECKPOINTS.map(cp=>({cp, rooms:0, sales:0, datesWithData:0, exactDates:0}));
-  let minKnown=Infinity, maxKnown=-Infinity;
-
-  stayDates.forEach(stayISO=>{
-    const rec = state.allData[stayISO];
-    if(!rec) return;
-    const snapKeys = Object.keys(rec);
-    if(snapKeys.length===0) return;
-    const rawPoints = snapKeys.map(sk=>({daysBefore: daysBefore(stayISO, sk), ...rec[sk]}));
-    rawPoints.forEach(p=>{
-      if(p.daysBefore<minKnown) minKnown=p.daysBefore;
-      if(p.daysBefore>maxKnown) maxKnown=p.daysBefore;
-    });
-    const series = buildCheckpointSeries(rawPoints);
-    series.forEach((s,i)=>{
-      if(s.hasData){
-        totals[i].rooms += s.rooms;
-        totals[i].sales += s.sales;
-        totals[i].datesWithData++;
-        if(s.isExact) totals[i].exactDates++;
-      }
-    });
-  });
-
-  return { totals, dayCount: stayDates.length, minKnown, maxKnown };
-}
-
-// destroy+track chart instances per named section so re-renders don't leak canvases
-const chartRegistry = {};
-function destroyCharts(key){
-  (chartRegistry[key]||[]).forEach(c=>c.destroy());
-  chartRegistry[key] = [];
-}
-
-// ---------- ③ 当月集計: aggregate scoped to whichever month the calendar is currently showing ----------
-function renderMonthAggregate(){
-  destroyCharts('monthAgg');
-  const subEl = document.getElementById('monthAggSub');
-  const kpiEl = document.getElementById('monthAggKpis');
-  const chartsEl = document.getElementById('monthAggCharts');
-  const emptyEl = document.getElementById('monthAggEmpty');
-
-  if(state.curYear==null || state.curMonth==null){
-    subEl.textContent=''; kpiEl.innerHTML=''; chartsEl.innerHTML='';
-    emptyEl.style.display='block';
-    return;
-  }
-  const y=state.curYear, m=state.curMonth;
-  const monthPrefix = `${y}-${String(m).padStart(2,'0')}-`;
-  const stayDates = Object.keys(state.allData).filter(iso=>iso.startsWith(monthPrefix));
-  const agg = computeAggregateFromDates(stayDates);
-
-  if(!agg){
-    subEl.textContent=''; kpiEl.innerHTML=''; chartsEl.innerHTML='';
-    emptyEl.style.display='block';
-    emptyEl.textContent = `${y}年${m}月のデータがまだありません。`;
-    return;
-  }
-  emptyEl.style.display='none';
-
-  const cap = state.settings.capacity||68;
-  const capLine = cap * agg.dayCount;
-  subEl.textContent =
-    `${y}年${m}月(${agg.dayCount}日分)を合算。実データは ${agg.minKnown}〜${agg.maxKnown}日前の範囲。`;
-
-  const latest = agg.totals[agg.totals.length-1];
-  const latestADR = latest.rooms>0 ? latest.sales/latest.rooms : 0;
-  kpiEl.innerHTML = `
-    <div class="kpi"><div class="v">${latest.rooms.toLocaleString()}室 / ${capLine.toLocaleString()}室泊</div><div class="l">現時点 合計販売室数</div></div>
-    <div class="kpi"><div class="v">${capLine? Math.round(latest.rooms/capLine*100):0}%</div><div class="l">当月 稼働率</div></div>
-    <div class="kpi"><div class="v">¥${Math.round(latest.sales).toLocaleString()}</div><div class="l">当月 合計売上</div></div>
-    <div class="kpi"><div class="v">¥${Math.round(latestADR).toLocaleString()}</div><div class="l">当月 ADR</div></div>
-  `;
-
-  const labels = agg.totals.map(t=>t.cp);
-  chartsEl.innerHTML = `
-    <div class="chart-block"><h3>合計販売室数</h3><canvas id="monthAggChRooms"></canvas></div>
-    <div class="chart-block"><h3>合計売上</h3><canvas id="monthAggChSales"></canvas></div>
-    <div class="chart-block"><h3>ADR</h3><canvas id="monthAggChAdr"></canvas></div>
-  `;
-  const seriesForChart = agg.totals.map(t=>({cp:t.cp, hasData:t.datesWithData>0, isExact:t.exactDates>0, rooms:t.rooms, sales:t.sales, adr: t.rooms>0? t.sales/t.rooms:0}));
-
-  chartRegistry['monthAgg'] = [
-    makeChart('monthAggChRooms', labels, seriesForChart.map(s=>s.hasData?s.rooms:null), seriesForChart, '#8A4A52', '室', capLine),
-    makeChart('monthAggChSales', labels, seriesForChart.map(s=>s.hasData?s.sales:null), seriesForChart, '#A8813E', '円'),
-    makeChart('monthAggChAdr', labels, seriesForChart.map(s=>s.hasData?s.adr:null), seriesForChart, '#3E5C74', '円')
-  ];
-}
-
-// ---------- ④ 月別ブッキングカーブ: selected month, this year vs same month last year ----------
-function populateOverlayMonthSelect(){
-  const sel = document.getElementById('overlayMonthSelect');
-  const prevValue = sel.value;
-  // months present in the data, keyed by month-number only (year is resolved at render time)
-  const monthsPresent = new Set(Object.keys(state.allData).map(iso=> Number(iso.slice(5,7))));
-  const months = [...monthsPresent].sort((a,b)=>a-b);
-  sel.innerHTML = '<option value="">-- 月を選択 --</option>' +
-    months.map(m=>`<option value="${m}">${m}月</option>`).join('');
-  if(months.includes(Number(prevValue))) sel.value = prevValue;
-  else if(months.length) sel.value = String(months[months.length-1]); // default to most recent month with data
-}
-document.getElementById('overlayMonthSelect').addEventListener('change', renderOverlayCurve);
-
-function renderOverlayCurve(){
-  destroyCharts('overlay');
-  const chartsEl = document.getElementById('overlayCharts');
-  const emptyEl = document.getElementById('overlayEmpty');
-  const subEl = document.getElementById('overlaySub');
-  const monthSel = document.getElementById('overlayMonthSelect');
-  const month = Number(monthSel.value);
-
-  if(!month){
-    chartsEl.innerHTML=''; emptyEl.style.display='block';
-    emptyEl.textContent = '月を選択すると比較グラフが表示されます。';
-    return;
-  }
-
-  // find years present for this month, use the two most recent (current + prior)
-  const mm = String(month).padStart(2,'0');
-  const yearsPresent = [...new Set(Object.keys(state.allData)
-    .filter(iso=>iso.slice(5,7)===mm)
-    .map(iso=>Number(iso.slice(0,4))))].sort((a,b)=>b-a);
-
-  if(yearsPresent.length===0){
-    chartsEl.innerHTML=''; emptyEl.style.display='block';
-    emptyEl.textContent = `${month}月のデータがありません。`;
-    return;
-  }
-
-  const curYear = yearsPresent[0];
-  const priorYear = curYear - 1;
-  const prior2Year = curYear - 2;
-  const curDates = Object.keys(state.allData).filter(iso=>iso.startsWith(`${curYear}-${mm}-`));
-  const priorDates = Object.keys(state.allData).filter(iso=>iso.startsWith(`${priorYear}-${mm}-`));
-  const prior2Dates = Object.keys(state.allData).filter(iso=>iso.startsWith(`${prior2Year}-${mm}-`));
-  const curAgg = computeAggregateFromDates(curDates);
-  const priorAgg = priorDates.length ? computeAggregateFromDates(priorDates) : null;
-  const prior2Agg = prior2Dates.length ? computeAggregateFromDates(prior2Dates) : null;
-
-  emptyEl.style.display='none';
-  const parts = [`${curYear}年${month}月(実線・濃)`];
-  if(priorAgg) parts.push(`${priorYear}年${month}月(点線)`);
-  if(prior2Agg) parts.push(`${prior2Year}年${month}月(点線・薄)`);
-  subEl.textContent = `${parts.join(' と ')}を、同じ「180〜0日前」の軸で比較しています。`;
-
-  const labels = CHECKPOINTS;
-  chartsEl.innerHTML = `
-    <div class="chart-block chart-block-primary"><h3>合計販売室数(最重要)</h3><canvas id="ovChRooms"></canvas></div>
-    <div class="chart-block"><h3>合計売上</h3><canvas id="ovChSales"></canvas></div>
-    <div class="chart-block"><h3>ADR</h3><canvas id="ovChAdr"></canvas></div>
-  `;
-
-  function buildDatasets(metricFn){
-    const datasets = [{
-      label:`${curYear}年${month}月`, color:'#8A4A52', dash:false,
-      data: curAgg.totals.map(t=> t.datesWithData>0 ? metricFn(t) : null)
-    }];
-    if(priorAgg){
-      datasets.push({
-        label:`${priorYear}年${month}月`, color:'#9096A3', dash:true,
-        data: priorAgg.totals.map(t=> t.datesWithData>0 ? metricFn(t) : null)
-      });
-    }
-    if(prior2Agg){
-      datasets.push({
-        label:`${prior2Year}年${month}月`, color:'#3E5C74', dash:true,
-        data: prior2Agg.totals.map(t=> t.datesWithData>0 ? metricFn(t) : null)
-      });
-    }
-    return datasets;
-  }
-
-  const roomsDatasets = buildDatasets(t=>t.rooms);
-  const salesDatasets = buildDatasets(t=>t.sales);
-  const adrDatasets = buildDatasets(t=> t.rooms>0 ? t.sales/t.rooms : 0);
-
-  chartRegistry['overlay'] = [
-    makeOverlayChart('ovChRooms', labels, roomsDatasets, '室', true),
-    makeOverlayChart('ovChSales', labels, salesDatasets, '円', false),
-    makeOverlayChart('ovChAdr', labels, adrDatasets, '円', false)
-  ];
-}
-
-function makeOverlayChart(canvasId, labels, datasets, unit, big){
-  const ctx = document.getElementById(canvasId).getContext('2d');
-  return new Chart(ctx, {
-    type:'line',
-    data:{
-      labels: labels.map(l=>String(l)),
-      datasets: datasets.map(d=>({
-        label:d.label, data:d.data, borderColor:d.color, backgroundColor:d.color+'15',
-        borderDash: d.dash ? [5,4] : undefined,
-        pointRadius:3, pointBackgroundColor:d.color, tension:0.15, spanGaps:true, fill:false
-      }))
-    },
-    options:{
-      responsive:true, maintainAspectRatio:true, aspectRatio: big?2.2:2.8,
-      plugins:{
-        legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
-        tooltip:{callbacks:{label:(c)=> c.formattedValue==null ? `${c.dataset.label}: データなし` : `${c.dataset.label}: ${c.formattedValue}${unit}`}}
-      },
-      scales:{
-        x:{ grid:{display:true, color:'#EEF0F3'}, ticks:{maxRotation:0, autoSkip:false, font:{size:10}} },
-        y:{ beginAtZero:true, grid:{color:'#E9EBEF'} }
-      }
-    }
-  });
-}
 
 // ---------- ⑤ 月次実績: KPIs + stay-basis / reservation-basis charts with forecast ----------
 // Forward-fill lookup: the value known "as of" a given calendar date (never peeks at future snapshots).
@@ -1453,28 +1178,6 @@ function renderMonthlyDayCurve(){
   });
 }
 
-// ---------- direct date selector (independent of calendar month navigation) ----------
-function populateCurveDateSelect(){
-  const sel = document.getElementById('curveDateSelect');
-  const prevValue = sel.value;
-  const dates = Object.keys(state.allData).sort();
-  sel.innerHTML = '<option value="">-- 日付を選択 --</option>' +
-    dates.map(iso=>{
-      const [y,m,d] = iso.split('-').map(Number);
-      const wk = DOWS[new Date(y,m-1,d).getDay()];
-      return `<option value="${iso}">${y}年${m}月${d}日(${wk})</option>`;
-    }).join('');
-  if(dates.includes(prevValue)) sel.value = prevValue;
-}
-document.getElementById('genCurveBtn').addEventListener('click', ()=>{
-  const iso = document.getElementById('curveDateSelect').value;
-  if(!iso){ alert('日付を選択してください'); return; }
-  openCurve(iso, null);
-});
-document.getElementById('curveDateSelect').addEventListener('change', (e)=>{
-  if(e.target.value) openCurve(e.target.value, null);
-});
-
 // ---------- calendar ----------
 const DOWS = ['日','月','火','水','木','金','土'];
 function dowRowHtml(){
@@ -1647,8 +1350,6 @@ function renderCalendar(){
       } else {
         cell.innerHTML = `<div class="d">${d}</div>`;
       }
-      cell.addEventListener('click', ()=>openCurve(stayISO, cell));
-      if(stayISO === state.curStayISO) cell.classList.add('selected');
       grid.appendChild(cell);
     }
     if(!anyData){
@@ -1656,7 +1357,6 @@ function renderCalendar(){
     }
   }
   document.getElementById('calEmpty').style.display = anyDataAny ? 'none':'block';
-  renderMonthAggregate();
 }
 
 function mixColor(hexA, hexB, t){
@@ -1671,206 +1371,6 @@ function hexToRgb(hex){
   return [parseInt(hex.slice(0,2),16), parseInt(hex.slice(2,4),16), parseInt(hex.slice(4,6),16)];
 }
 
-// ---------- booking curve ----------
-// Standard revenue-management lead-time checkpoints: a 6-month (180-day) booking window,
-// coarse far out from arrival, fine-grained close to arrival where OTA rate tuning matters most.
-const CHECKPOINTS = [180,170,160,150,140,130,120,110,100,90,80,70,60,50,40,30,21,14,7,5,3,2,1,0];
-
-function openCurve(stayISO, cellEl){
-  state.curStayISO = stayISO;
-
-  const sel = document.getElementById('curveDateSelect');
-  if([...sel.options].some(o=>o.value===stayISO)) sel.value = stayISO;
-
-  if(cellEl){
-    document.querySelectorAll('.cell.selected').forEach(el=>el.classList.remove('selected'));
-    cellEl.classList.add('selected');
-  } else {
-    // triggered from the selector: jump the calendar to the matching month and highlight it there too
-    const [y,m] = stayISO.split('-').map(Number);
-    if(state.curYear!==y || state.curMonth!==m){ state.curYear=y; state.curMonth=m; }
-    renderCalendar();
-  }
-
-  renderCurve(stayISO);
-  document.getElementById('curveCard').scrollIntoView({behavior:'smooth', block:'start'});
-}
-
-function daysBefore(stayISO, snapISO){
-  const a = new Date(stayISO+'T00:00:00'), b = new Date(snapISO+'T00:00:00');
-  return Math.round((a-b)/86400000);
-}
-
-// Finds the date ~1 year earlier that falls on the SAME weekday (e.g. Sat 2026-05-16 -> Sat 2025-05-17),
-// which is what actually matters for hotel demand comparison, not the raw calendar date.
-function weekdayAdjustedPriorYear(dateISO){
-  const d = new Date(dateISO+'T00:00:00');
-  const targetWeekday = d.getDay();
-  const naive = new Date(d.getFullYear()-1, d.getMonth(), d.getDate());
-  let best=null, bestDist=Infinity;
-  for(let offset=-3; offset<=3; offset++){
-    const cand = new Date(naive);
-    cand.setDate(cand.getDate()+offset);
-    if(cand.getDay()===targetWeekday && Math.abs(offset)<bestDist){
-      bestDist = Math.abs(offset);
-      best = cand;
-    }
-  }
-  return best.toISOString().slice(0,10);
-}
-
-// For each fixed checkpoint, find the snapshot whose daysBefore is nearest to it.
-// Exact matches (or the nearest available data) are marked isExact so the chart can
-// visually distinguish real observations from interpolated/carried-forward values.
-function buildCheckpointSeries(rawPoints){
-  return CHECKPOINTS.map(cp=>{
-    let best=null, bestDist=Infinity;
-    for(const p of rawPoints){
-      const dist = Math.abs(p.daysBefore - cp);
-      if(dist < bestDist){ bestDist=dist; best=p; }
-    }
-    if(!best) return {cp, hasData:false, isExact:false};
-    return {cp, hasData:true, ...best, isExact: bestDist===0, distance: bestDist};
-  });
-}
-
-function renderCurve(stayISO){
-  charts.forEach(c=>c.destroy()); charts=[];
-  const rec = state.allData[stayISO];
-  const [y,m,d] = stayISO.split('-').map(Number);
-  const wk = DOWS[new Date(y,m-1,d).getDay()];
-  document.getElementById('curveTitle').textContent = `${y}年${m}月${d}日 (${wk})`;
-
-  const cap = state.settings.capacity||68;
-  const kpiEl = document.getElementById('curveKpis');
-  const chartsEl = document.getElementById('curveCharts');
-  const emptyEl = document.getElementById('curveEmpty');
-
-  if(!rec || Object.keys(rec).length===0){
-    document.getElementById('curveSub').textContent = '';
-    kpiEl.innerHTML=''; chartsEl.innerHTML='';
-    emptyEl.style.display='block';
-    emptyEl.textContent = 'この日付の取込データがありません。';
-    return;
-  }
-  emptyEl.style.display='none';
-
-  const snapKeys = Object.keys(rec).sort();
-  const rawPoints = snapKeys.map(sk=>({
-    daysBefore: daysBefore(stayISO, sk), snap:sk, ...rec[sk]
-  }));
-  const maxKnown = Math.max(...rawPoints.map(p=>p.daysBefore));
-  const minKnown = Math.min(...rawPoints.map(p=>p.daysBefore));
-
-  // weekday-matched comparison date from the previous year (e.g. Sat 2026-05-16 vs Sat 2025-05-17)
-  const compareISO = weekdayAdjustedPriorYear(stayISO);
-  const compareRec = state.allData[compareISO];
-  let compareSeries = null;
-  if(compareRec && Object.keys(compareRec).length){
-    const compareRaw = Object.keys(compareRec).sort().map(sk=>({
-      daysBefore: daysBefore(compareISO, sk), snap:sk, ...compareRec[sk]
-    }));
-    compareSeries = buildCheckpointSeries(compareRaw);
-  }
-  const [cy,cm,cd] = compareISO.split('-').map(Number);
-  const compareWk = DOWS[new Date(cy,cm-1,cd).getDay()];
-  const compareLabel = `${cy}年${cm}月${cd}日(${compareWk})`;
-
-  document.getElementById('curveSub').textContent = compareSeries
-    ? `実線=今年(実データ ${minKnown}〜${maxKnown}日前) 点線=前年同曜日 ${compareLabel} との比較。●=実データ　○=補完`
-    : `180日前〜当日の固定24ポイントで表示(実データは ${minKnown}〜${maxKnown}日前の範囲)。前年同曜日(${compareLabel})のデータはまだありません。●=実データ　○=補完`;
-
-  const series = buildCheckpointSeries(rawPoints);
-  const latestReal = rawPoints.reduce((a,b)=> b.daysBefore<a.daysBefore ? b : a);
-  kpiEl.innerHTML = `
-    <div class="kpi"><div class="v">${latestReal.rooms}室 / ${cap}室</div><div class="l">最新(${latestReal.daysBefore}日前) 販売室数</div></div>
-    <div class="kpi"><div class="v">${Math.round(latestReal.rooms/cap*100)}%</div><div class="l">稼働率</div></div>
-    <div class="kpi"><div class="v">¥${Math.round(latestReal.sales).toLocaleString()}</div><div class="l">売上</div></div>
-    <div class="kpi"><div class="v">¥${Math.round(latestReal.adr).toLocaleString()}</div><div class="l">平均客室単価(ADR)</div></div>
-  `;
-
-  const labels = series.map(s=>s.cp);
-  chartsEl.innerHTML = `
-    <div class="chart-block chart-block-primary"><h3>販売客室数(最重要)</h3><canvas id="chRooms"></canvas></div>
-    <div class="chart-block"><h3>売上</h3><canvas id="chSales"></canvas></div>
-    <div class="chart-block"><h3>平均客室単価(ADR)</h3><canvas id="chAdr"></canvas></div>
-  `;
-
-  const compareRooms = compareSeries ? {data: compareSeries.map(s=>s.hasData?s.rooms:null), label:`前年同曜日(${compareLabel})`} : null;
-  const compareSales = compareSeries ? {data: compareSeries.map(s=>s.hasData?s.sales:null), label:`前年同曜日(${compareLabel})`} : null;
-  const compareAdr = compareSeries ? {data: compareSeries.map(s=>s.hasData?s.adr:null), label:`前年同曜日(${compareLabel})`} : null;
-
-  charts.push(makeChart('chRooms', labels, series.map(s=>s.hasData?s.rooms:null), series, '#8A4A52', '室', cap, compareRooms, true));
-  charts.push(makeChart('chSales', labels, series.map(s=>s.hasData?s.sales:null), series, '#A8813E', '円', null, compareSales, false));
-  charts.push(makeChart('chAdr', labels, series.map(s=>s.hasData?s.adr:null), series, '#3E5C74', '円', null, compareAdr, false));
-}
-
-function makeChart(canvasId, labels, data, series, color, unit, capLine, compare, big, gross){
-  const ctx = document.getElementById(canvasId).getContext('2d');
-  const pointStyles = series.map(s=> !s.hasData ? 'crossRot' : 'circle');
-  const pointRadii = series.map(s=> !s.hasData ? 0 : (s.isExact ? 5 : 3));
-  const pointFill = series.map(s=> s.isExact ? color : '#fff');
-  const hasSecondary = !!compare || !!gross;
-  const datasets = [{
-    label: hasSecondary ? '今年(実売)' : '',
-    data, borderColor:color, backgroundColor:color+'22',
-    tension:0, pointRadius:pointRadii, pointStyle:pointStyles,
-    pointBackgroundColor:pointFill, pointBorderColor:color, pointBorderWidth:2,
-    fill:true, spanGaps:true
-  }];
-  if(compare && compare.data){
-    datasets.push({
-      label: compare.label, data: compare.data,
-      borderColor:'#9096A3', backgroundColor:'transparent',
-      borderDash:[5,4], pointRadius:2, pointBackgroundColor:'#9096A3',
-      tension:0, fill:false, spanGaps:true
-    });
-  }
-  if(gross && gross.data){
-    datasets.push({
-      label: gross.label || '総需要(キャンセル込み)', data: gross.data,
-      borderColor:'#B08D57', backgroundColor:'transparent',
-      borderDash:[2,2], pointRadius:2, pointBackgroundColor:'#B08D57',
-      tension:0, fill:false, spanGaps:true
-    });
-  }
-  if(capLine){
-    datasets.push({
-      label:'満室', data: labels.map(()=>capLine), borderColor:'#999', borderDash:[2,3],
-      pointRadius:0, fill:false
-    });
-  }
-  return new Chart(ctx, {
-    type:'line',
-    data:{ labels: labels.map(l=>String(l)), datasets },
-    options:{
-      responsive:true, maintainAspectRatio:true,
-      aspectRatio: big ? (hasSecondary?2.0:2.4) : (hasSecondary?2.8:3.4),
-      plugins:{
-        legend:{ display: hasSecondary, position:'bottom', labels:{boxWidth:12, font:{size:11}, filter:(item)=>item.text!=='満室'} },
-        tooltip:{callbacks:{
-          label:(c)=>{
-            if(c.datasetIndex!==0){
-              return c.formattedValue==null ? `${c.dataset.label}: データなし` : `${c.dataset.label}: ${c.formattedValue}${unit}`;
-            }
-            const s = series[c.dataIndex];
-            if(!s.hasData) return 'データなし';
-            let tag;
-            if(s.isExact) tag = '実データ';
-            else if(s.daysBefore!=null) tag = `補完(実際は${s.daysBefore}日前時点)`;
-            else tag = '一部補完あり';
-            return `${c.formattedValue}${unit}　[${tag}]`;
-          }
-        }}
-      },
-      scales:{
-        x:{ grid:{display:true, color:'#EEF0F3'}, ticks:{maxRotation:0, autoSkip:false, font:{size:10}} },
-        y:{ beginAtZero:true, grid:{color:'#E9EBEF'} }
-      }
-    }
-  });
-}
-
 // ---------- init ----------
 (async function init(){
   try{
@@ -1879,11 +1379,8 @@ function makeChart(canvasId, labels, data, series, color, unit, capLine, compare
     console.error('loadAll failed', e);
   }
   renderCalendar();
-  populateCurveDateSelect();
-  populateOverlayMonthSelect();
   populateMrMonthSelect(); renderMonthlyDayCurve();
   renderMonthlyReport();
-  renderOverlayCurve();
   if(Object.keys(state.allData).length){
     setStatus(`サーバーから読み込みました(${Object.keys(state.allData).length}日分、全利用者共通データ)。`, 'ok');
   } else {
