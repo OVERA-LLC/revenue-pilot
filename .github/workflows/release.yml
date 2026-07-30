@@ -1,0 +1,28 @@
+name: Build and Release
+
+# vX.Y.Z 形式のタグをpushすると自動的に実行されます
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: Node.jsをセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 依存パッケージをインストール
+        run: npm install
+
+      - name: ビルドしてGitHub Releaseに公開
+        run: npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
