@@ -1,7 +1,7 @@
 {
   "name": "revenue-pilot",
   "productName": "Revenue Pilot",
-  "version": "1.0.8",
+  "version": "1.0.10",
   "description": "Revenue Pilot Desktop App",
   "main": "main.js",
   "private": true,
@@ -29,6 +29,12 @@
       "**/*",
       "!dist/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "OVERA-LLC",
+      "repo": "revenue-pilot",
+      "releaseType": "release"
+    },
     "win": {
       "target": "nsis"
     },
