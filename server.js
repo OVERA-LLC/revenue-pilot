@@ -143,7 +143,16 @@ app.delete('/api/csv/incoming/:filename', allowCors, (req, res) => {
 });
 
 // ---- static frontend ----
-app.use(express.static(path.join(__dirname, 'public')));
+// Disable caching entirely for the frontend. Without this, Electron's Chromium engine can keep
+// serving a stale cached copy of index.html/app.js across app UPDATES, since the URL is always
+// the same (http://localhost:3000/) even though the underlying files changed between versions.
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModified: false, maxAge: 0 }));
 
 function startServer() {
   const server = app.listen(PORT, () => {
