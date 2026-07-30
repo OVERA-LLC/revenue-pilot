@@ -307,6 +307,10 @@
           </select>
         </div>
         <button class="ghost" id="genCurveBtn" type="button">生成</button>
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+          <input type="checkbox" id="showGrossToggle" style="width:auto;">
+          <span style="font-size:11.5px; color:var(--ink-soft);">総需要(キャンセル込み)も表示</span>
+        </label>
       </div>
       <div class="curve-title" id="curveTitle">日付を選択してください</div>
       <div class="curve-sub" id="curveSub"></div>
@@ -324,7 +328,7 @@
 
 <script>
 const COLS = ['曜日','日','ランク','室数','人数合計','大人','子供','室料','稼働率','DOR','ADR','RevPAR','売止'];
-const state = { allData:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null };
+const state = { allData:{}, allDataGross:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null, showGrossDemand:false };
 let charts = [];
 
 function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
@@ -360,6 +364,7 @@ async function apiDelete(pathSuffix){
 // Pull the latest full dataset from the server (picks up other users' uploads too).
 async function loadAll(){
   state.allData = await apiGet('/data');
+  state.allDataGross = await apiGet('/data-gross');
   const savedSettings = await apiGet('/settings');
   // While a local capacity edit is being saved (or was just saved), NEVER let a server
   // fetch overwrite it — no matter how the timing lines up. This is the one field the
@@ -377,6 +382,10 @@ async function loadAll(){
 async function pushPoints(points){
   if(!points.length) return;
   await apiPost('/data', {points});
+}
+async function pushPointsGross(points){
+  if(!points || !points.length) return;
+  await apiPost('/data-gross', {points});
 }
 async function saveSettings(){
   await apiPost('/settings', state.settings);
@@ -573,79 +582,105 @@ function parseCSVReservations(csvText){
     groups.get(key).push({type, receivedISO, checkinISO, checkoutISO, nights, rooms, totalPrice});
   });
 
-  // build each booking's chronological state-transition timeline
+  // build each booking's chronological state-transition timeline.
+  // "transitions" = net state (a 取消 zeroes the booking out from that point on) — used for the
+  // normal on-the-books booking curve (rate-setting).
+  // "transitionsGross" = same, but 取消 is ignored entirely, so a cancelled booking's last known
+  // room/sales value persists forever — used for the "total demand incl. cancellations" curve.
   const groupTransitions = new Map();
+  const groupTransitionsGross = new Map();
   for(const [key, events] of groups.entries()){
     events.sort((a,b)=> a.receivedISO < b.receivedISO ? -1 : a.receivedISO > b.receivedISO ? 1 : 0);
     const transitions = [];
+    const transitionsGross = [];
+    let lastNonCancel = null;
     events.forEach(ev=>{
       let state_;
       if(ev.type==='予約' || ev.type==='変更'){
         state_ = { rooms: ev.rooms, salesPerNight: ev.nights>0 ? ev.totalPrice/ev.nights : 0, checkinISO: ev.checkinISO, checkoutISO: ev.checkoutISO };
+        lastNonCancel = state_;
+        transitionsGross.push({ atISO: ev.receivedISO, ...state_ });
       } else {
         state_ = { rooms: 0, salesPerNight: 0, checkinISO: ev.checkinISO, checkoutISO: ev.checkoutISO };
+        // gross view: ignore the cancellation, keep the last known non-cancelled state as-is
+        if(lastNonCancel) transitionsGross.push({ atISO: ev.receivedISO, ...lastNonCancel });
       }
       transitions.push({ atISO: ev.receivedISO, ...state_ });
     });
     groupTransitions.set(key, transitions);
+    groupTransitionsGross.set(key, transitionsGross);
   }
 
   // index which nights each booking group covers (union across all its transitions, in case dates shift)
-  const perNight = new Map();
-  for(const [key, transitions] of groupTransitions.entries()){
-    if(transitions.length===0) continue;
-    const nightSet = new Set();
-    transitions.forEach(tr=>{
-      let d = new Date(tr.checkinISO+'T00:00:00');
-      const end = new Date(tr.checkoutISO+'T00:00:00');
-      while(d < end){
-        nightSet.add(d.toISOString().slice(0,10));
-        d.setDate(d.getDate()+1);
-      }
-    });
-    nightSet.forEach(n=>{
-      if(!perNight.has(n)) perNight.set(n, []);
-      perNight.get(n).push(transitions);
-    });
-  }
-
-  // merge across all bookings covering each night, at every date something changed for that night
-  let addedStayDates = new Set();
-  let addedPoints = 0;
-  let flatPoints = [];
-
-  for(const [night, transitionLists] of perNight.entries()){
-    const timeSet = new Set();
-    transitionLists.forEach(trs => trs.forEach(tr=> timeSet.add(tr.atISO)));
-    const times = [...timeSet].sort();
-
-    times.forEach(t=>{
-      let totalRooms=0, totalSales=0;
-      transitionLists.forEach(trs=>{
-        let active = null;
-        for(const tr of trs){
-          if(tr.atISO <= t) active = tr; else break;
-        }
-        if(active){
-          const d = new Date(night+'T00:00:00');
-          const ci = new Date(active.checkinISO+'T00:00:00');
-          const co = new Date(active.checkoutISO+'T00:00:00');
-          if(d>=ci && d<co){
-            totalRooms += active.rooms;
-            totalSales += active.salesPerNight;
-          }
+  function indexPerNight(transitionsMap){
+    const perNight = new Map();
+    for(const [key, transitions] of transitionsMap.entries()){
+      if(transitions.length===0) continue;
+      const nightSet = new Set();
+      transitions.forEach(tr=>{
+        let d = new Date(tr.checkinISO+'T00:00:00');
+        const end = new Date(tr.checkoutISO+'T00:00:00');
+        while(d < end){
+          nightSet.add(d.toISOString().slice(0,10));
+          d.setDate(d.getDate()+1);
         }
       });
-      const adr = totalRooms>0 ? totalSales/totalRooms : 0;
-      const revpar = cap>0 ? totalSales/cap : 0;
-      if(!state.allData[night]) state.allData[night] = {};
-      state.allData[night][t] = { rooms: totalRooms, sales: totalSales, adr, revpar };
-      addedStayDates.add(night); addedPoints++;
-      flatPoints.push({stayISO:night, snapshotISO:t, rooms:totalRooms, sales:totalSales, adr, revpar});
-    });
+      nightSet.forEach(n=>{
+        if(!perNight.has(n)) perNight.set(n, []);
+        perNight.get(n).push(transitions);
+      });
+    }
+    return perNight;
+  }
+  const perNight = indexPerNight(groupTransitions);
+  const perNightGross = indexPerNight(groupTransitionsGross);
+
+  // merge across all bookings covering each night, at every date something changed for that night
+  function mergeNights(perNightMap, targetData){
+    let addedStayDates = new Set();
+    let addedPoints = 0;
+    let flatPoints = [];
+    for(const [night, transitionLists] of perNightMap.entries()){
+      const timeSet = new Set();
+      transitionLists.forEach(trs => trs.forEach(tr=> timeSet.add(tr.atISO)));
+      const times = [...timeSet].sort();
+
+      times.forEach(t=>{
+        let totalRooms=0, totalSales=0;
+        transitionLists.forEach(trs=>{
+          let active = null;
+          for(const tr of trs){
+            if(tr.atISO <= t) active = tr; else break;
+          }
+          if(active){
+            const d = new Date(night+'T00:00:00');
+            const ci = new Date(active.checkinISO+'T00:00:00');
+            const co = new Date(active.checkoutISO+'T00:00:00');
+            if(d>=ci && d<co){
+              totalRooms += active.rooms;
+              totalSales += active.salesPerNight;
+            }
+          }
+        });
+        const adr = totalRooms>0 ? totalSales/totalRooms : 0;
+        const revpar = cap>0 ? totalSales/cap : 0;
+        if(!targetData[night]) targetData[night] = {};
+        targetData[night][t] = { rooms: totalRooms, sales: totalSales, adr, revpar };
+        addedStayDates.add(night); addedPoints++;
+        flatPoints.push({stayISO:night, snapshotISO:t, rooms:totalRooms, sales:totalSales, adr, revpar});
+      });
+    }
+    return { stayDates:[...addedStayDates], points: addedPoints, flatPoints };
   }
 
-  return { stayDates:[...addedStayDates], points: addedPoints, flatPoints };
+  const netResult = mergeNights(perNight, state.allData);
+  if(!state.allDataGross) state.allDataGross = {};
+  const grossResult = mergeNights(perNightGross, state.allDataGross);
+
+  return {
+    stayDates: netResult.stayDates, points: netResult.points, flatPoints: netResult.flatPoints,
+    flatPointsGross: grossResult.flatPoints
+  };
 }
 
 document.getElementById('loadBtn').addEventListener('click', async ()=>{
@@ -703,6 +738,7 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
     // from other users/devices are never overwritten; then re-fetch the merged result.
     try{
       await pushPoints(result.flatPoints);
+      if(result.flatPointsGross) await pushPointsGross(result.flatPointsGross);
       await saveSettings();
       await loadAll(); // refresh from server, picks up anything other users just added too
       renderCalendar();
@@ -739,6 +775,7 @@ async function checkIncomingCSVs(){
       totalPoints += result.points;
       result.stayDates.forEach(d=>totalDates.add(d));
       if(result.flatPoints.length) await pushPoints(result.flatPoints);
+      if(result.flatPointsGross && result.flatPointsGross.length) await pushPointsGross(result.flatPointsGross);
       await fetch(API_BASE + '/csv/incoming/' + encodeURIComponent(filename), {method:'DELETE'});
     }
 
@@ -770,6 +807,7 @@ document.getElementById('clearBtn').addEventListener('click', async ()=>{
   if(!confirm('サーバー上の全てのブッキングカーブデータを削除します(他の利用者の分も含みます)。よろしいですか？')) return;
   try{
     await apiDelete('/data');
+    await apiDelete('/data-gross');
     await loadAll();
     renderCalendar();
     populateCurveDateSelect();
@@ -1407,6 +1445,10 @@ document.getElementById('genCurveBtn').addEventListener('click', ()=>{
 document.getElementById('curveDateSelect').addEventListener('change', (e)=>{
   if(e.target.value) openCurve(e.target.value, null);
 });
+document.getElementById('showGrossToggle').addEventListener('change', (e)=>{
+  state.showGrossDemand = e.target.checked;
+  if(state.curStayISO) renderCurve(state.curStayISO);
+});
 
 // ---------- calendar ----------
 const DOWS = ['日','月','火','水','木','金','土'];
@@ -1733,18 +1775,33 @@ function renderCurve(stayISO){
   const compareSales = compareSeries ? {data: compareSeries.map(s=>s.hasData?s.sales:null), label:`前年同曜日(${compareLabel})`} : null;
   const compareAdr = compareSeries ? {data: compareSeries.map(s=>s.hasData?s.adr:null), label:`前年同曜日(${compareLabel})`} : null;
 
-  charts.push(makeChart('chRooms', labels, series.map(s=>s.hasData?s.rooms:null), series, '#8A4A52', '室', cap, compareRooms, true));
-  charts.push(makeChart('chSales', labels, series.map(s=>s.hasData?s.sales:null), series, '#A8813E', '円', null, compareSales, false));
+  // 総需要(キャンセル込み): same checkpoint machinery, reading from the gross dataset instead
+  let grossRooms = null, grossSales = null;
+  if(state.showGrossDemand){
+    const grossRec = state.allDataGross && state.allDataGross[stayISO];
+    if(grossRec && Object.keys(grossRec).length){
+      const grossRaw = Object.keys(grossRec).sort().map(sk=>({
+        daysBefore: daysBefore(stayISO, sk), snap:sk, ...grossRec[sk]
+      }));
+      const grossSeries = buildCheckpointSeries(grossRaw);
+      grossRooms = {data: grossSeries.map(s=>s.hasData?s.rooms:null), label:'総需要(キャンセル込み)'};
+      grossSales = {data: grossSeries.map(s=>s.hasData?s.sales:null), label:'総需要(キャンセル込み)'};
+    }
+  }
+
+  charts.push(makeChart('chRooms', labels, series.map(s=>s.hasData?s.rooms:null), series, '#8A4A52', '室', cap, compareRooms, true, grossRooms));
+  charts.push(makeChart('chSales', labels, series.map(s=>s.hasData?s.sales:null), series, '#A8813E', '円', null, compareSales, false, grossSales));
   charts.push(makeChart('chAdr', labels, series.map(s=>s.hasData?s.adr:null), series, '#3E5C74', '円', null, compareAdr, false));
 }
 
-function makeChart(canvasId, labels, data, series, color, unit, capLine, compare, big){
+function makeChart(canvasId, labels, data, series, color, unit, capLine, compare, big, gross){
   const ctx = document.getElementById(canvasId).getContext('2d');
   const pointStyles = series.map(s=> !s.hasData ? 'crossRot' : 'circle');
   const pointRadii = series.map(s=> !s.hasData ? 0 : (s.isExact ? 5 : 3));
   const pointFill = series.map(s=> s.isExact ? color : '#fff');
+  const hasSecondary = !!compare || !!gross;
   const datasets = [{
-    label: compare ? '今年' : '',
+    label: hasSecondary ? '今年(実売)' : '',
     data, borderColor:color, backgroundColor:color+'22',
     tension:0, pointRadius:pointRadii, pointStyle:pointStyles,
     pointBackgroundColor:pointFill, pointBorderColor:color, pointBorderWidth:2,
@@ -1755,6 +1812,14 @@ function makeChart(canvasId, labels, data, series, color, unit, capLine, compare
       label: compare.label, data: compare.data,
       borderColor:'#9096A3', backgroundColor:'transparent',
       borderDash:[5,4], pointRadius:2, pointBackgroundColor:'#9096A3',
+      tension:0, fill:false, spanGaps:true
+    });
+  }
+  if(gross && gross.data){
+    datasets.push({
+      label: gross.label || '総需要(キャンセル込み)', data: gross.data,
+      borderColor:'#B08D57', backgroundColor:'transparent',
+      borderDash:[2,2], pointRadius:2, pointBackgroundColor:'#B08D57',
       tension:0, fill:false, spanGaps:true
     });
   }
@@ -1769,9 +1834,9 @@ function makeChart(canvasId, labels, data, series, color, unit, capLine, compare
     data:{ labels: labels.map(l=>String(l)), datasets },
     options:{
       responsive:true, maintainAspectRatio:true,
-      aspectRatio: big ? (compare?2.0:2.4) : (compare?2.8:3.4),
+      aspectRatio: big ? (hasSecondary?2.0:2.4) : (hasSecondary?2.8:3.4),
       plugins:{
-        legend:{ display: !!compare, position:'bottom', labels:{boxWidth:12, font:{size:11}, filter:(item)=>item.text!=='満室'} },
+        legend:{ display: hasSecondary, position:'bottom', labels:{boxWidth:12, font:{size:11}, filter:(item)=>item.text!=='満室'} },
         tooltip:{callbacks:{
           label:(c)=>{
             if(c.datasetIndex!==0){

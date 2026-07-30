@@ -27,10 +27,12 @@ try {
 
 const DATA_DIR = path.join(baseDir, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'all_data.json');
+const DATA_GROSS_FILE = path.join(DATA_DIR, 'all_data_gross.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '{}');
+if (!fs.existsSync(DATA_GROSS_FILE)) fs.writeFileSync(DATA_GROSS_FILE, '{}');
 if (!fs.existsSync(SETTINGS_FILE)) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ capacity: 68 }));
 
 function readJSON(file) {
@@ -96,6 +98,46 @@ app.delete('/api/data', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE /api/data failed:', err);
+    res.status(500).json({ error: 'delete failed', message: err.message });
+  }
+});
+
+// ---- gross (cancellation-inclusive) dataset, for "total demand" analysis alongside the
+// normal on-the-books curve. Same shape and merge behavior as /api/data. ----
+app.get('/api/data-gross', (req, res) => {
+  res.json(readJSON(DATA_GROSS_FILE));
+});
+
+app.post('/api/data-gross', async (req, res) => {
+  const { points } = req.body || {};
+  if (!Array.isArray(points)) return res.status(400).json({ error: 'points array required' });
+
+  try {
+    const data = readJSON(DATA_GROSS_FILE);
+    for (const p of points) {
+      if (!p || !p.stayISO || !p.snapshotISO) continue;
+      if (!data[p.stayISO]) data[p.stayISO] = {};
+      data[p.stayISO][p.snapshotISO] = {
+        rooms: Number(p.rooms) || 0,
+        sales: Number(p.sales) || 0,
+        adr: Number(p.adr) || 0,
+        revpar: Number(p.revpar) || 0
+      };
+    }
+    await queueWrite(DATA_GROSS_FILE, data);
+    res.json({ ok: true, merged: points.length });
+  } catch (err) {
+    console.error('POST /api/data-gross failed:', err);
+    res.status(500).json({ error: 'save failed', message: err.message });
+  }
+});
+
+app.delete('/api/data-gross', async (req, res) => {
+  try {
+    await queueWrite(DATA_GROSS_FILE, {});
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /api/data-gross failed:', err);
     res.status(500).json({ error: 'delete failed', message: err.message });
   }
 });
