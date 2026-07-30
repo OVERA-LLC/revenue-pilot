@@ -12,6 +12,14 @@ on:
 permissions:
   contents: write
 
+# 同じタグに対して実行が2つ同時に走ってしまった場合(GitHub側のWebhook配信が
+# まれに同じイベントを2回送ることがある)、後から始まった方を優先し、先に
+# 走っていた方は自動でキャンセルする。これで同じバージョンのReleaseが
+# 2つできてしまう不具合を防ぐ。
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-release:
     runs-on: windows-latest
