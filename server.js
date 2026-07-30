@@ -69,25 +69,35 @@ app.post('/api/data', async (req, res) => {
   const { points } = req.body || {};
   if (!Array.isArray(points)) return res.status(400).json({ error: 'points array required' });
 
-  const data = readJSON(DATA_FILE);
-  for (const p of points) {
-    if (!p || !p.stayISO || !p.snapshotISO) continue;
-    if (!data[p.stayISO]) data[p.stayISO] = {};
-    data[p.stayISO][p.snapshotISO] = {
-      rooms: Number(p.rooms) || 0,
-      sales: Number(p.sales) || 0,
-      adr: Number(p.adr) || 0,
-      revpar: Number(p.revpar) || 0
-    };
+  try {
+    const data = readJSON(DATA_FILE);
+    for (const p of points) {
+      if (!p || !p.stayISO || !p.snapshotISO) continue;
+      if (!data[p.stayISO]) data[p.stayISO] = {};
+      data[p.stayISO][p.snapshotISO] = {
+        rooms: Number(p.rooms) || 0,
+        sales: Number(p.sales) || 0,
+        adr: Number(p.adr) || 0,
+        revpar: Number(p.revpar) || 0
+      };
+    }
+    await queueWrite(DATA_FILE, data);
+    res.json({ ok: true, merged: points.length });
+  } catch (err) {
+    console.error('POST /api/data failed:', err);
+    res.status(500).json({ error: 'save failed', message: err.message });
   }
-  await queueWrite(DATA_FILE, data);
-  res.json({ ok: true, merged: points.length });
 });
 
 // Wipe all data (used by the "保存データを全消去" button)
 app.delete('/api/data', async (req, res) => {
-  await queueWrite(DATA_FILE, {});
-  res.json({ ok: true });
+  try {
+    await queueWrite(DATA_FILE, {});
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /api/data failed:', err);
+    res.status(500).json({ error: 'delete failed', message: err.message });
+  }
 });
 
 app.get('/api/settings', (req, res) => {
@@ -96,8 +106,13 @@ app.get('/api/settings', (req, res) => {
 
 app.post('/api/settings', async (req, res) => {
   const settings = req.body || {};
-  await queueWrite(SETTINGS_FILE, settings);
-  res.json({ ok: true });
+  try {
+    await queueWrite(SETTINGS_FILE, settings);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /api/settings failed:', err);
+    res.status(500).json({ error: 'save failed', message: err.message });
+  }
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
@@ -119,9 +134,14 @@ if (!fs.existsSync(INCOMING_DIR)) fs.mkdirSync(INCOMING_DIR, { recursive: true }
 
 app.options('/api/csv/incoming', allowCors);
 app.post('/api/csv/incoming', allowCors, express.text({ type: '*/*', limit: '20mb' }), (req, res) => {
-  const filename = `csv_${Date.now()}.csv`;
-  fs.writeFileSync(path.join(INCOMING_DIR, filename), req.body, 'utf-8');
-  res.json({ ok: true, filename });
+  try {
+    const filename = `csv_${Date.now()}.csv`;
+    fs.writeFileSync(path.join(INCOMING_DIR, filename), req.body, 'utf-8');
+    res.json({ ok: true, filename });
+  } catch (err) {
+    console.error('POST /api/csv/incoming failed:', err);
+    res.status(500).json({ error: 'save failed', message: err.message });
+  }
 });
 
 app.get('/api/csv/incoming', allowCors, (req, res) => {
