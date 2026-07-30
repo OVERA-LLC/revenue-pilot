@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Revenue Pilot</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#F4F5F7;
+    --panel:#FFFFFF;
+    --ink:#1B2028;
+    --ink-soft:#6B7280;
+    --line:#E3E6EA;
+    --coral:#8A4A52;
+    --coral-soft:#EFE1E3;
+    --gold:#A8813E;
+    --navy:#1B2333;
+    --blue:#3E5C74;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .display{ font-family: "Shippori Mincho", "Hiragino Mincho ProN", serif; }
+  header{
+    padding:0 24px; height:56px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+    background:var(--navy); color:#fff;
+  }
+  .topnav-left{ display:flex; align-items:center; gap:28px; height:100%; }
+  .brand{ display:flex; align-items:center; }
+  header h1{ font-size:16px; margin:0; letter-spacing:.02em; font-weight:700; color:#fff; }
+  header .sub{ color:#9FB0C3; font-size:12.5px; margin-top:3px;}
+  .topnav-tabs{ display:flex; align-items:center; height:100%; gap:4px; }
+  .topnav-tab{
+    background:transparent; border:none; color:#9FB0C3; font-weight:600; font-size:13px;
+    padding:8px 14px; border-radius:7px; cursor:pointer; height:36px;
+  }
+  .topnav-tab:hover{ color:#fff; }
+  .topnav-tab.active{ background:#fff; color:var(--navy); }
+  header .ghost{ background:transparent; color:#fff; border:1px solid rgba(255,255,255,.35); }
+  header .ghost:hover{ background:rgba(255,255,255,.12); }
+  .headline-note{ color:#9FB0C3; font-size:12px;}
+  main{ max-width:1180px; margin:0 auto; padding:22px 5px 60px;}
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px 5px; margin-bottom:18px;
+  }
+  .card h2{ font-size:14px; margin:0 0 12px; color:var(--navy); letter-spacing:.03em; font-weight:700;}
+  .row{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;}
+  label{ font-size:11.5px; color:var(--ink-soft); display:block; margin-bottom:4px;}
+  input, select{
+    font-size:13px; padding:7px 9px; border:1px solid var(--line); border-radius:7px;
+    background:#fff; color:var(--ink);
+  }
+  button{
+    font-size:13px; padding:8px 16px; border-radius:7px; border:none;
+    background:var(--coral); color:#fff; cursor:pointer; font-weight:600;
+    transition:opacity .15s;
+  }
+  button:hover{ opacity:.88; }
+  button.ghost{
+    background:transparent; color:var(--navy); border:1px solid var(--line);
+  }
+  .status{ font-size:12.5px; margin-top:10px; min-height:16px; }
+  .status.ok{ color:#3A7A5C; }
+  .status.err{ color:var(--coral); }
+  .status.busy{ color:var(--ink-soft); }
+
+  .selected-hint{ font-size:11px; color:var(--ink-soft); }
+
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+  .cal-head .month-title{ font-size:19px; font-weight:700; }
+  .legend{ font-size:11px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
+  .legend .grad{ width:90px; height:8px; border-radius:4px; background:linear-gradient(90deg,#fff,var(--coral)); border:1px solid var(--line);}
+  .legend .grad-diff{ width:90px; height:8px; border-radius:4px; background:linear-gradient(90deg,var(--blue),#fff,var(--coral)); border:1px solid var(--line);}
+  .diff-toggle{ font-size:11.5px; padding:6px 10px; }
+  .diff-toggle.active{ background:var(--navy); color:#fff; border-color:var(--navy); }
+
+  .grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .dow{ text-align:center; font-size:10.5px; color:var(--ink-soft); padding-bottom:4px; font-weight:600;}
+  .dow.sun{ color:var(--coral); } .dow.sat{ color:var(--blue); }
+  .cal-3col{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+  .cal-month-col{ min-width:0; }
+  .cal-month-col .month-label{ font-size:13px; font-weight:700; margin-bottom:8px; color:var(--ink); }
+  .cell{
+    border-radius:7px; padding:5px 4px 6px; min-height:84px; cursor:pointer;
+    border:1px solid var(--line); position:relative; transition:transform .1s;
+    background:#fff;
+  }
+  .cell:hover{ transform:translateY(-2px); box-shadow:0 4px 10px rgba(0,0,0,.08); }
+  .cell.empty{ visibility:hidden; }
+  .cell .d{ font-size:10.5px; font-weight:700; }
+  .cell .rooms{ font-size:14px; font-weight:800; margin-top:4px; }
+  .cell .diff{ font-size:9px; margin-top:1px; font-weight:600; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:clip; }
+  .diff.up{ color:#000; }
+  .diff.down{ color:#000; }
+  .diff.flat{ color:#000; }
+
+  .curve-title{ font-size:18px; font-weight:700; margin-bottom:2px; }
+  .curve-sub{ font-size:12px; color:var(--ink-soft); margin-bottom:14px; }
+  .chart-block{ margin-bottom:22px; }
+  .chart-block-primary{
+    background:#F3F0EA; border:1px solid var(--coral-soft); border-radius:10px;
+    padding:14px 16px 6px; margin-bottom:22px;
+  }
+  .chart-block-primary h3{ color:var(--coral); font-size:13.5px; }
+  .chart-block h3{ font-size:12.5px; color:var(--navy); margin:0 0 6px; font-weight:700;}
+  canvas{ max-height:230px; }
+  .empty-note{
+    text-align:center; color:var(--ink-soft); font-size:13px; padding:40px 10px;
+    border:1px dashed var(--line); border-radius:8px;
+  }
+  .kpis{ display:flex; gap:22px; margin-bottom:14px; flex-wrap:wrap;}
+  .kpi .v{ font-size:20px; font-weight:800; }
+  .kpi .l{ font-size:11px; color:var(--ink-soft); }
+  .cell.selected{ outline:2px solid var(--navy); outline-offset:-2px; }
+  a.back{ font-size:12.5px; color:var(--navy); cursor:pointer; text-decoration:underline; }
+
+  .collapsible-head{ cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; }
+  .collapsible-head .chev{ font-size:12px; color:var(--ink-soft); transition:transform .15s; }
+  .collapsible.collapsed .collapsible-head .chev{ transform:rotate(-90deg); }
+  .collapsible.collapsed .collapsible-body{ display:none; }
+  .collapsible-head:hover{ opacity:.75; }
+</style>
+</head>
+<body>
+<header id="topNav">
+  <div class="topnav-left">
+    <div class="brand">
+      <h1 class="display">Revenue Pilot</h1>
+    </div>
+  </div>
+  <div class="row" style="align-items:center; gap:14px;">
+    <div class="headline-note" id="capNote"></div>
+  </div>
+</header>
+
+<main>
+
+  <div class="card collapsible" id="importCard">
+    <h2 class="collapsible-head" data-target="importBody">データ取込 <span class="chev">▾</span></h2>
+    <div class="collapsible-body" id="importBody">
+      <div class="row">
+        <div>
+          <label>予約CSV / Excelファイル</label>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        </div>
+        <div>
+          <label>取得日(スナップショット日) ※Excelのみ使用</label>
+          <input type="date" id="snapDate">
+        </div>
+        <div>
+          <label>年(西暦・シート内に年表記が無いため指定) ※Excelのみ使用</label>
+          <input type="number" id="baseYear" style="width:90px;">
+        </div>
+        <div>
+          <label>総客室数</label>
+          <input type="number" id="capacity" style="width:80px;">
+        </div>
+        <button id="loadBtn">取り込む</button>
+        <button class="ghost" id="checkIncomingBtn" type="button">最新情報取得</button>
+        <button class="ghost" id="clearBtn" type="button">保存データを全消去</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>カレンダー</h2>
+    <div class="cal-head">
+      <div class="row" style="align-items:center; gap:8px;">
+        <button class="ghost" id="prevMonth">‹</button>
+        <div class="month-title" id="monthTitle">-</div>
+        <button class="ghost" id="nextMonth">›</button>
+      </div>
+      <div class="row" style="align-items:center; gap:12px;">
+        <div class="row" style="gap:4px;">
+          <button class="ghost diff-toggle active" id="diffWindow7" type="button">7日前比較</button>
+          <button class="ghost diff-toggle" id="diffWindow1" type="button">1日前比較</button>
+          <button class="ghost diff-toggle" id="diffWindowBoth" type="button">1日/7日前</button>
+        </div>
+        <div class="legend">減 <span class="grad-diff"></span> 増</div>
+      </div>
+    </div>
+    <div class="cal-3col" id="cal3col">
+      <div class="cal-month-col">
+        <div class="grid dow-grid" id="dowRow0"></div>
+        <div class="grid" id="calGrid0"></div>
+      </div>
+      <div class="cal-month-col">
+        <div class="grid dow-grid" id="dowRow1"></div>
+        <div class="grid" id="calGrid1"></div>
+      </div>
+      <div class="cal-month-col">
+        <div class="grid dow-grid" id="dowRow2"></div>
+        <div class="grid" id="calGrid2"></div>
+      </div>
+    </div>
+    <div id="calEmpty" class="empty-note" style="display:none;">この期間のデータがまだありません。Excelを取り込んでください。</div>
+  </div>
+
+  <div class="card" id="monthlyReportCard">
+    <h2>月次実績</h2>
+    <div class="row" style="margin-bottom:14px;">
+      <div>
+        <label>対象月</label>
+        <select id="mrMonthSelect" style="min-width:140px;">
+          <option value="">-- 月を選択 --</option>
+        </select>
+      </div>
+    </div>
+    <div id="mrEmpty" class="empty-note">月を選択すると実績が表示されます。</div>
+    <div id="mrBody" style="display:none;">
+      <div class="curve-sub" id="mrKpiSub"></div>
+      <div class="kpis" id="mrKpis" style="margin-bottom:18px;"></div>
+
+      <h3 style="margin:0 0 6px; font-size:13px; color:var(--navy);">今年度・前年度・前々年度 6ヶ月比較</h3>
+      <div class="row" style="margin-bottom:10px; gap:18px;">
+        <div>
+          <label>表示データ</label>
+          <div class="row" style="gap:4px;">
+            <button class="ghost diff-toggle active" id="mr3MetricSales" type="button">売上</button>
+            <button class="ghost diff-toggle" id="mr3MetricRooms" type="button">販売客室数</button>
+          </div>
+        </div>
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+          <input type="checkbox" id="mr3ShowGrossToggle" style="width:auto;">
+          <span style="font-size:11.5px; color:var(--ink-soft);">今年度の総需要(キャンセル込み)も表示</span>
+        </label>
+      </div>
+      <div class="curve-sub" id="mrChartSub"></div>
+      <div class="chart-block chart-block-primary"><canvas id="mrChart"></canvas></div>
+
+      <h3 style="margin:24px 0 10px; font-size:13px; color:var(--navy);">月別ブッキングカーブ(180〜0日)</h3>
+      <div id="mrDayEmpty" class="empty-note">月を選択するとブッキングカーブが表示されます。</div>
+      <div id="mrDayBody" style="display:none;">
+        <div class="row" style="margin-bottom:10px; gap:18px;">
+          <div>
+            <label>グラフの基準</label>
+            <div class="row" style="gap:4px;">
+              <button class="ghost diff-toggle active" id="mrBasisStay" type="button">宿泊日基準</button>
+              <button class="ghost diff-toggle" id="mrBasisReservation" type="button">予約日基準</button>
+            </div>
+          </div>
+          <div>
+            <label>表示データ</label>
+            <div class="row" style="gap:4px;">
+              <button class="ghost diff-toggle active" id="mrDayMetricSales" type="button">売上</button>
+              <button class="ghost diff-toggle" id="mrDayMetricRooms" type="button">販売客室数</button>
+            </div>
+          </div>
+          <div>
+            <label>表示日数</label>
+            <select id="mrDaysSelect" style="width:90px;">
+              <option value="30">30日</option>
+              <option value="60">60日</option>
+              <option value="90">90日</option>
+              <option value="180" selected>180日</option>
+            </select>
+          </div>
+        </div>
+        <div class="curve-sub" id="mrDayChartSub"></div>
+        <div class="chart-block chart-block-primary"><canvas id="mrDayChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer style="text-align:center; padding:18px 0 30px; color:#9AA0AC; font-size:11.5px; letter-spacing:.04em;">
+  by OVERA
+</footer>
+
+<script>
+const COLS = ['曜日','日','ランク','室数','人数合計','大人','子供','室料','稼働率','DOR','ADR','RevPAR','売止'];
+const state = { allData:{}, allDataGross:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null };
+let charts = [];
+
+function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
+document.getElementById('snapDate').value = todayISO();
+document.getElementById('baseYear').value = new Date().getFullYear();
+
+function setStatus(msg, cls){
+  const el = document.getElementById('status');
+  el.textContent = msg; el.className = 'status ' + (cls||'');
+}
+
+// ---------- storage helpers (shared backend API — same data for every user/device) ----------
+const API_BASE = '/api';
+
+async function apiGet(pathSuffix){
+  const res = await fetch(API_BASE + pathSuffix);
+  if(!res.ok) throw new Error(`API GET ${pathSuffix} failed (${res.status})`);
+  return res.json();
+}
+async function apiPost(pathSuffix, body){
+  const res = await fetch(API_BASE + pathSuffix, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error(`API POST ${pathSuffix} failed (${res.status})`);
+  return res.json();
+}
+async function apiDelete(pathSuffix){
+  const res = await fetch(API_BASE + pathSuffix, {method:'DELETE'});
+  if(!res.ok) throw new Error(`API DELETE ${pathSuffix} failed (${res.status})`);
+  return res.json();
+}
+
+// Pull the latest full dataset from the server (picks up other users' uploads too).
+async function loadAll(){
+  state.allData = await apiGet('/data');
+  state.allDataGross = await apiGet('/data-gross');
+  const savedSettings = await apiGet('/settings');
+  // While a local capacity edit is being saved (or was just saved), NEVER let a server
+  // fetch overwrite it — no matter how the timing lines up. This is the one field the
+  // user edits directly outside of an import, so it needs its own guard.
+  if(!state.capacityLocalPending){
+    if(savedSettings && savedSettings.capacity) state.settings = savedSettings;
+    document.getElementById('capacity').value = state.settings.capacity || 68;
+  }
+  state.settingsLoaded = true;
+  updateCapNote();
+}
+
+// Send only the newly-parsed points (not the whole local dataset) so we never
+// clobber data that other users uploaded concurrently. The server merges them in.
+async function pushPoints(points){
+  if(!points.length) return;
+  await apiPost('/data', {points});
+}
+async function pushPointsGross(points){
+  if(!points || !points.length) return;
+  await apiPost('/data-gross', {points});
+}
+async function saveSettings(){
+  await apiPost('/settings', state.settings);
+}
+function updateCapNote(){
+  document.getElementById('capNote').textContent = '総客室数: ' + (state.settings.capacity||'-') + '室';
+}
+
+// Editing the 総客室数 field directly (without running an import) should also take effect
+// immediately: update the header note right away, then persist it to the server. The
+// capacityLocalPending flag stays true for the whole save so a concurrent "最新情報取得"
+// click can never reset the field back to a stale server value mid-save.
+document.getElementById('capacity').addEventListener('change', async ()=>{
+  const v = parseInt(document.getElementById('capacity').value, 10);
+  if(!v || v<=0) return;
+  state.settings.capacity = v;
+  state.capacityLocalPending = true;
+  updateCapNote();
+  try{
+    await saveSettings();
+  }catch(e){
+    console.error('capacity save failed', e);
+  }finally{
+    state.capacityLocalPending = false;
+  }
+  renderCalendar();
+});
+
+// ---------- excel parsing ----------
+function dateISO(y,m,d){
+  const mm=String(m).padStart(2,'0'), dd=String(d).padStart(2,'0');
+  return `${y}-${mm}-${dd}`;
+}
+function addDaysISO(iso, days){
+  const dt = new Date(iso+'T00:00:00');
+  dt.setDate(dt.getDate()+days);
+  return dt.toISOString().slice(0,10);
+}
+
+function parseWorkbook(wb, snapshotISO, baseYear){
+  let addedStayDates = new Set();
+  let addedPoints = 0;
+  let flatPoints = []; // sent to the backend so it can merge just these points server-side
+
+  wb.SheetNames.forEach(sheetName=>{
+    const ws = wb.Sheets[sheetName];
+    const aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+    // pre-scan month markers per row
+    const monthAtRow = new Array(aoa.length).fill(null);
+    let lastMonth = null;
+    for(let r=0;r<aoa.length;r++){
+      for(const cell of aoa[r]){
+        const m = String(cell).trim().match(/^(\d{1,2})月$/);
+        if(m){ lastMonth = parseInt(m[1],10); break; }
+      }
+      monthAtRow[r]=lastMonth;
+    }
+
+    let runningYear = baseYear;
+    let prevMonthSeen = null;
+
+    for(let r=0;r<aoa.length;r++){
+      const row = aoa[r];
+      const groupStarts=[];
+      row.forEach((cell,idx)=>{ if(String(cell).trim()==='曜日') groupStarts.push(idx); });
+      if(groupStarts.length===0) continue;
+
+      let month = monthAtRow[r];
+      if(month==null) continue;
+      if(prevMonthSeen!==null && month < prevMonthSeen) runningYear++;
+      prevMonthSeen = month;
+      const year = runningYear;
+
+      // walk data rows below header until block ends
+      let dr = r+1;
+      while(dr < aoa.length){
+        const dayCell = aoa[dr][groupStarts[0]+1];
+        const wkCell = String(aoa[dr][groupStarts[0]+0]).trim();
+        if(wkCell === '集計' || wkCell === '') break;
+        const dayNum = Number(dayCell);
+        if(!dayCell || isNaN(dayNum) || dayNum<1 || dayNum>31){ dr++; continue; }
+        const daysInThisMonth = new Date(year, month, 0).getDate();
+        if(dayNum > daysInThisMonth){ dr++; continue; } // template leftover row (e.g. "31" in a 30-day month)
+
+        const stayISO = dateISO(year, month, dayNum);
+        let curVals=null, lastWeekVals=null;
+
+        groupStarts.forEach((g, gi)=>{
+          const rooms = Number(aoa[dr][g+3])||0;
+          const sales = Number(aoa[dr][g+7])||0;
+          const occRaw = aoa[dr][g+8];
+          const adr = Number(aoa[dr][g+10])||0;
+          const revpar = Number(aoa[dr][g+11])||0;
+          let occ = 0;
+          if(typeof occRaw === 'number') occ = occRaw<=1 ? occRaw*100 : occRaw;
+          else if(typeof occRaw === 'string'){ const p=parseFloat(occRaw); occ = isNaN(p)?0:p; }
+          const vals = {rooms, sales, adr, revpar, occ};
+          if(gi===0) curVals = vals;
+          if(gi===1) lastWeekVals = vals;
+          // gi===2 (pickup) intentionally not stored directly; derived from cur-lastweek
+        });
+
+        if(curVals){
+          if(!state.allData[stayISO]) state.allData[stayISO]={};
+          state.allData[stayISO][snapshotISO] = curVals;
+          addedStayDates.add(stayISO); addedPoints++;
+          flatPoints.push({stayISO, snapshotISO, rooms:curVals.rooms, sales:curVals.sales, adr:curVals.adr, revpar:curVals.revpar});
+        }
+        if(lastWeekVals){
+          const lwISO = addDaysISO(snapshotISO, -7);
+          if(!state.allData[stayISO]) state.allData[stayISO]={};
+          state.allData[stayISO][lwISO] = lastWeekVals;
+          addedStayDates.add(stayISO); addedPoints++;
+          flatPoints.push({stayISO, snapshotISO:lwISO, rooms:lastWeekVals.rooms, sales:lastWeekVals.sales, adr:lastWeekVals.adr, revpar:lastWeekVals.revpar});
+        }
+        dr++;
+      }
+    }
+  });
+  return { stayDates:[...addedStayDates], points: addedPoints, flatPoints };
+}
+
+// ---------- CSV reservation-log parsing (予約/変更/取消 transaction export) ----------
+// This produces the SAME state.allData shape as parseWorkbook (stayISO -> snapshotISO -> {rooms,sales,adr,revpar}),
+// so the calendar / booking-curve / overlay rendering code needs zero changes.
+//
+// Input: one row per reservation event.
+//   通知種別(予約/変更/取消), 予約受信日, チェックイン日, チェックアウト日, 泊数, 利用客室合計数, 合計宿泊料金(総額)
+//
+// Each 予約/変更 row carries the FULL current state of that booking (not a delta) — a 変更 row
+// supersedes the previous state for the same booking, and 取消 zeroes it out from that point on.
+// There's no explicit booking ID in this export, so bookings are grouped by (guest name + check-in date),
+// which matches the data in practice but can't distinguish two unrelated same-night bookings under an
+// identical name — a rare edge case worth knowing about but not worth blocking on.
+function parseCSVLine(line){
+  const result=[]; let cur=''; let inQuotes=false;
+  for(let i=0;i<line.length;i++){
+    const c = line[i];
+    if(inQuotes){
+      if(c==='"'){
+        if(line[i+1]==='"'){ cur+='"'; i++; }
+        else inQuotes=false;
+      } else cur+=c;
+    } else {
+      if(c==='"') inQuotes=true;
+      else if(c===','){ result.push(cur); cur=''; }
+      else cur+=c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function ymdToISO(s){
+  if(!s || s.length<8) return null;
+  return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
+}
+
+async function readFileAsText(file){
+  const buf = await file.arrayBuffer();
+  try{
+    const text = new TextDecoder('shift_jis').decode(buf);
+    if(text.includes('\ufffd')) throw new Error('mojibake');
+    return text;
+  }catch(e){
+    return new TextDecoder('utf-8').decode(buf);
+  }
+}
+
+function parseCSVReservations(csvText){
+  const lines = csvText.split(/\r\n|\n/).filter(l=>l.length>0);
+  const rows = lines.map(parseCSVLine);
+  const dataRows = rows.slice(1); // drop header row
+  const cap = state.settings.capacity || 68;
+
+  // group raw events by (name, checkin date)
+  const groups = new Map();
+  dataRows.forEach(row=>{
+    if(row.length<21) return;
+    const type = row[0];
+    const receivedISO = ymdToISO(row[3]);
+    const nameKanji = (row[5]||'').trim();
+    const nameHalf = (row[4]||'').trim();
+    const checkinISO = ymdToISO(row[6]);
+    const checkoutISO = ymdToISO(row[7]);
+    const nights = Number(row[8])||0;
+    const rooms = Number(row[9])||0;
+    const totalPrice = Number(row[20])||0;
+    if(!receivedISO || !checkinISO || !checkoutISO || nights<=0) return;
+    if(type!=='予約' && type!=='変更' && type!=='取消') return;
+    const key = (nameKanji||nameHalf||'unknown') + '|' + checkinISO;
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({type, receivedISO, checkinISO, checkoutISO, nights, rooms, totalPrice});
+  });
+
+  // build each booking's chronological state-transition timeline.
+  // "transitions" = net state (a 取消 zeroes the booking out from that point on) — used for the
+  // normal on-the-books booking curve (rate-setting).
+  // "transitionsGross" = same, but 取消 is ignored entirely, so a cancelled booking's last known
+  // room/sales value persists forever — used for the "total demand incl. cancellations" curve.
+  const groupTransitions = new Map();
+  const groupTransitionsGross = new Map();
+  for(const [key, events] of groups.entries()){
+    events.sort((a,b)=> a.receivedISO < b.receivedISO ? -1 : a.receivedISO > b.receivedISO ? 1 : 0);
+    const transitions = [];
+    const transitionsGross = [];
+    let lastNonCancel = null;
+    events.forEach(ev=>{
+      let state_;
+      if(ev.type==='予約' || ev.type==='変更'){
+        state_ = { rooms: ev.rooms, salesPerNight: ev.nights>0 ? ev.totalPrice/ev.nights : 0, checkinISO: ev.checkinISO, checkoutISO: ev.checkoutISO };
+        lastNonCancel = state_;
+        transitionsGross.push({ atISO: ev.receivedISO, ...state_ });
+      } else {
+        state_ = { rooms: 0, salesPerNight: 0, checkinISO: ev.checkinISO, checkoutISO: ev.checkoutISO };
+        // gross view: ignore the cancellation, keep the last known non-cancelled state as-is
+        if(lastNonCancel) transitionsGross.push({ atISO: ev.receivedISO, ...lastNonCancel });
+      }
+      transitions.push({ atISO: ev.receivedISO, ...state_ });
+    });
+    groupTransitions.set(key, transitions);
+    groupTransitionsGross.set(key, transitionsGross);
+  }
+
+  // index which nights each booking group covers (union across all its transitions, in case dates shift)
+  function indexPerNight(transitionsMap){
+    const perNight = new Map();
+    for(const [key, transitions] of transitionsMap.entries()){
+      if(transitions.length===0) continue;
+      const nightSet = new Set();
+      transitions.forEach(tr=>{
+        let d = new Date(tr.checkinISO+'T00:00:00');
+        const end = new Date(tr.checkoutISO+'T00:00:00');
+        while(d < end){
+          nightSet.add(d.toISOString().slice(0,10));
+          d.setDate(d.getDate()+1);
+        }
+      });
+      nightSet.forEach(n=>{
+        if(!perNight.has(n)) perNight.set(n, []);
+        perNight.get(n).push(transitions);
+      });
+    }
+    return perNight;
+  }
+  const perNight = indexPerNight(groupTransitions);
+  const perNightGross = indexPerNight(groupTransitionsGross);
+
+  // merge across all bookings covering each night, at every date something changed for that night
+  function mergeNights(perNightMap, targetData){
+    let addedStayDates = new Set();
+    let addedPoints = 0;
+    let flatPoints = [];
+    for(const [night, transitionLists] of perNightMap.entries()){
+      const timeSet = new Set();
+      transitionLists.forEach(trs => trs.forEach(tr=> timeSet.add(tr.atISO)));
+      const times = [...timeSet].sort();
+
+      times.forEach(t=>{
+        let totalRooms=0, totalSales=0;
+        transitionLists.forEach(trs=>{
+          let active = null;
+          for(const tr of trs){
+            if(tr.atISO <= t) active = tr; else break;
+          }
+          if(active){
+            const d = new Date(night+'T00:00:00');
+            const ci = new Date(active.checkinISO+'T00:00:00');
+            const co = new Date(active.checkoutISO+'T00:00:00');
+            if(d>=ci && d<co){
+              totalRooms += active.rooms;
+              totalSales += active.salesPerNight;
+            }
+          }
+        });
+        const adr = totalRooms>0 ? totalSales/totalRooms : 0;
+        const revpar = cap>0 ? totalSales/cap : 0;
+        if(!targetData[night]) targetData[night] = {};
+        targetData[night][t] = { rooms: totalRooms, sales: totalSales, adr, revpar };
+        addedStayDates.add(night); addedPoints++;
+        flatPoints.push({stayISO:night, snapshotISO:t, rooms:totalRooms, sales:totalSales, adr, revpar});
+      });
+    }
+    return { stayDates:[...addedStayDates], points: addedPoints, flatPoints };
+  }
+
+  const netResult = mergeNights(perNight, state.allData);
+  if(!state.allDataGross) state.allDataGross = {};
+  const grossResult = mergeNights(perNightGross, state.allDataGross);
+
+  return {
+    stayDates: netResult.stayDates, points: netResult.points, flatPoints: netResult.flatPoints,
+    flatPointsGross: grossResult.flatPoints
+  };
+}
+
+// ---------- 予約番号ベースの取込(検索結果ページのスクレイピング由来) ----------
+// Same overall approach as parseCSVReservations (build per-group transitions, index which nights
+// each group covers, merge per night), but grouped by 予約番号 — far more robust than name+checkin,
+// since it can never accidentally merge two different guests who happen to share a name and date.
+// events: [{ resNo, type('予約'|'変更'|'取消'), checkinISO, checkoutISO, nights, rooms, totalPrice, receivedISO(full timestamp, for correct same-day ordering) }]
+function parseReservationEvents(events){
+  const cap = state.settings.capacity || 68;
+  const groups = new Map();
+  events.forEach(ev=>{
+    if(!ev.resNo || !ev.checkinISO || !ev.checkoutISO || !ev.receivedISO || ev.nights<=0) return;
+    if(ev.type!=='予約' && ev.type!=='変更' && ev.type!=='取消') return;
+    if(!groups.has(ev.resNo)) groups.set(ev.resNo, []);
+    groups.get(ev.resNo).push(ev);
+  });
+
+  const groupTransitions = new Map();
+  const groupTransitionsGross = new Map();
+  for(const [resNo, evs] of groups.entries()){
+    evs.sort((a,b)=> a.receivedISO < b.receivedISO ? -1 : a.receivedISO > b.receivedISO ? 1 : 0);
+    const transitions = [];
+    const transitionsGross = [];
+    let lastNonCancel = null;
+    evs.forEach(ev=>{
+      let state_;
+      if(ev.type==='予約' || ev.type==='変更'){
+        state_ = { rooms: ev.rooms, salesPerNight: ev.nights>0 ? ev.totalPrice/ev.nights : 0, checkinISO: ev.checkinISO, checkoutISO: ev.checkoutISO };
+        lastNonCancel = state_;
+        transitionsGross.push({ atISO: ev.receivedISO, ...state_ });
+      } else {
+        state_ = { rooms: 0, salesPerNight: 0, checkinISO: ev.checkinISO, checkoutISO: ev.checkoutISO };
+        if(lastNonCancel) transitionsGross.push({ atISO: ev.receivedISO, ...lastNonCancel });
+      }
+      transitions.push({ atISO: ev.receivedISO, ...state_ });
+    });
+    groupTransitions.set(resNo, transitions);
+    groupTransitionsGross.set(resNo, transitionsGross);
+  }
+
+  function indexPerNight(transitionsMap){
+    const perNight = new Map();
+    for(const [key, transitions] of transitionsMap.entries()){
+      if(transitions.length===0) continue;
+      const nightSet = new Set();
+      transitions.forEach(tr=>{
+        let d = new Date(tr.checkinISO+'T00:00:00');
+        const end = new Date(tr.checkoutISO+'T00:00:00');
+        while(d < end){ nightSet.add(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+      });
+      nightSet.forEach(n=>{
+        if(!perNight.has(n)) perNight.set(n, []);
+        perNight.get(n).push(transitions);
+      });
+    }
+    return perNight;
+  }
+  const perNight = indexPerNight(groupTransitions);
+  const perNightGross = indexPerNight(groupTransitionsGross);
+
+  function mergeNights(perNightMap, targetData){
+    let addedStayDates = new Set(); let addedPoints = 0; let flatPoints = [];
+    for(const [night, transitionLists] of perNightMap.entries()){
+      const timeSet = new Set();
+      transitionLists.forEach(trs => trs.forEach(tr=> timeSet.add(tr.atISO)));
+      const times = [...timeSet].sort();
+      times.forEach(t=>{
+        let totalRooms=0, totalSales=0;
+        transitionLists.forEach(trs=>{
+          let active = null;
+          for(const tr of trs){ if(tr.atISO <= t) active = tr; else break; }
+          if(active){
+            const d = new Date(night+'T00:00:00');
+            const ci = new Date(active.checkinISO+'T00:00:00');
+            const co = new Date(active.checkoutISO+'T00:00:00');
+            if(d>=ci && d<co){ totalRooms += active.rooms; totalSales += active.salesPerNight; }
+          }
+        });
+        const adr = totalRooms>0 ? totalSales/totalRooms : 0;
+        const revpar = cap>0 ? totalSales/cap : 0;
+        // snapshot key: use just the date portion (existing schema is per-day, not per-minute)
+        const snapDate = t.slice(0,10);
+        if(!targetData[night]) targetData[night] = {};
+        targetData[night][snapDate] = { rooms: totalRooms, sales: totalSales, adr, revpar };
+        addedStayDates.add(night); addedPoints++;
+        flatPoints.push({stayISO:night, snapshotISO:snapDate, rooms:totalRooms, sales:totalSales, adr, revpar});
+      });
+    }
+    return { stayDates:[...addedStayDates], points: addedPoints, flatPoints };
+  }
+
+  const netResult = mergeNights(perNight, state.allData);
+  if(!state.allDataGross) state.allDataGross = {};
+  const grossResult = mergeNights(perNightGross, state.allDataGross);
+
+  return {
+    stayDates: netResult.stayDates, points: netResult.points, flatPoints: netResult.flatPoints,
+    flatPointsGross: grossResult.flatPoints
+  };
+}
+
+document.getElementById('loadBtn').addEventListener('click', async ()=>{
+  const fileEl = document.getElementById('fileInput');
+
+  if(!fileEl.files.length){ setStatus('ファイルを選択してください', 'err'); return; }
+  const file = fileEl.files[0];
+  const isCSV = /\.csv$/i.test(file.name);
+
+  if(!isCSV){
+    const snapDateCheck = document.getElementById('snapDate').value;
+    if(!snapDateCheck){ setStatus('Excelファイルの場合は取得日を指定してください', 'err'); return; }
+  }
+
+  setStatus('読み込み中…', 'busy');
+  try{
+    // make sure the capacity field reflects the real saved value before we read/re-save it,
+    // otherwise a page loaded a moment ago could still show the placeholder default
+    if(!state.settingsLoaded) await loadAll();
+    const capacity = parseInt(document.getElementById('capacity').value,10) || state.settings.capacity || 68;
+    state.settings.capacity = capacity;
+
+    let result;
+    if(isCSV){
+      const csvText = await readFileAsText(file);
+      result = parseCSVReservations(csvText);
+    } else {
+      const snapDate = document.getElementById('snapDate').value;
+      const baseYear = parseInt(document.getElementById('baseYear').value,10);
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array'});
+      result = parseWorkbook(wb, snapDate, baseYear);
+    }
+
+    if(result.points===0){
+      setStatus('データを検出できませんでした。ファイルの内容をご確認ください。', 'err');
+      return;
+    }
+    updateCapNote();
+
+    // jump calendar to the month of the first parsed stay date, then render immediately
+    if(result.stayDates.length){
+      const [y,m] = result.stayDates.sort()[0].split('-').map(Number);
+      state.curYear=y; state.curMonth=m;
+    }
+    renderCalendar();
+    populateMrMonthSelect(); renderMonthlyDayCurve();
+    renderMonthlyReport();
+    setStatus(`取込完了: ${result.stayDates.length}日分、${result.points}件のスナップショットを画面に反映しました。サーバーに送信中…`, 'ok');
+
+    // send only the new points (never the whole local copy) so concurrent uploads
+    // from other users/devices are never overwritten; then re-fetch the merged result.
+    try{
+      await pushPoints(result.flatPoints);
+      if(result.flatPointsGross) await pushPointsGross(result.flatPointsGross);
+      await saveSettings();
+      await loadAll(); // refresh from server, picks up anything other users just added too
+      renderCalendar();
+      populateMrMonthSelect(); renderMonthlyDayCurve();
+      renderMonthlyReport();
+      setStatus(`取込完了: ${result.stayDates.length}日分、${result.points}件のスナップショットをサーバーに保存し、全員分の最新データを反映しました。`, 'ok');
+    }catch(storageErr){
+      console.error('server save failed', storageErr);
+      setStatus(`画面には反映されましたが、サーバーへの保存に失敗しました(バックエンドが起動しているか確認してください): ${storageErr.message}`, 'err');
+    }
+  }catch(e){
+    console.error(e);
+    setStatus('読み込みエラー: ' + e.message, 'err');
+  }
+});
+
+// ---------- pick up CSVs posted directly by the Lincoln bookmarklet (bypassing manual download/upload) ----------
+async function checkIncomingCSVs(){
+  setStatus('保留中のデータを確認中…', 'busy');
+  try{
+    const listRes = await apiGet('/csv/incoming');
+    const files = listRes.files || [];
+
+    let totalPoints = 0;
+    const totalDates = new Set();
+    for(const filename of files){
+      const textRes = await fetch(API_BASE + '/csv/incoming/' + encodeURIComponent(filename));
+      if(!textRes.ok) continue;
+      const csvText = await textRes.text();
+      const result = parseCSVReservations(csvText);
+      totalPoints += result.points;
+      result.stayDates.forEach(d=>totalDates.add(d));
+      if(result.flatPoints.length) await pushPoints(result.flatPoints);
+      if(result.flatPointsGross && result.flatPointsGross.length) await pushPointsGross(result.flatPointsGross);
+      await fetch(API_BASE + '/csv/incoming/' + encodeURIComponent(filename), {method:'DELETE'});
+    }
+
+    // NOTE: 予約番号ベースのデータ取込は現在デバッグ中のため、一時的に無効化しています。
+    // (CSVの正しいデータを不完全な計算結果で上書きしてしまう不具合が見つかったため)
+    // 保留中のファイルはサーバー上にそのまま残しており、削除も処理もしていません。
+
+    // always refresh from the server too, whether or not any pending data was found,
+    // so this same action also works as a general "get latest info" button
+    await loadAll();
+    renderCalendar();
+    populateMrMonthSelect(); renderMonthlyDayCurve();
+    renderMonthlyReport();
+
+    const totalFiles = files.length;
+    if(totalFiles){
+      setStatus(`保留CSVを${totalFiles}件取り込みました(${totalDates.size}日分、${totalPoints}件のスナップショット)。`, 'ok');
+    } else {
+      setStatus('最新データを取得しました(保留中のデータはありませんでした)。', 'ok');
+    }
+  }catch(e){
+    console.error(e);
+    setStatus('取得に失敗しました: ' + e.message, 'err');
+  }
+}
+document.getElementById('checkIncomingBtn').addEventListener('click', checkIncomingCSVs);
+
+
+document.getElementById('clearBtn').addEventListener('click', async ()=>{
+  if(!confirm('サーバー上の全てのブッキングカーブデータを削除します(他の利用者の分も含みます)。よろしいですか？')) return;
+  try{
+    await apiDelete('/data');
+    await apiDelete('/data-gross');
+    await loadAll();
+    renderCalendar();
+    populateMrMonthSelect(); renderMonthlyDayCurve();
+    renderMonthlyReport();
+    setStatus('全データを削除しました。', 'ok');
+  }catch(e){
+    setStatus('削除に失敗しました: ' + e.message, 'err');
+  }
+});
+
+// ---------- collapsible sections (calendar & monthly report always shown; the rest collapsed by default) ----------
+document.querySelectorAll('.collapsible-head').forEach(head=>{
+  head.addEventListener('click', ()=>{
+    head.closest('.collapsible').classList.toggle('collapsed');
+  });
+});
+// start collapsed
+document.querySelectorAll('.collapsible').forEach(c=>c.classList.add('collapsed'));
+
+// ---------- tabs ----------
+// (tabs removed — calendar and booking curve are shown together on one page)
+
+// ---------- ⑤ 月次実績: KPIs + stay-basis / reservation-basis charts with forecast ----------
+// Forward-fill lookup: the value known "as of" a given calendar date (never peeks at future snapshots).
+function valueAsOf(rec, dateISO){
+  if(!rec) return null;
+  const keys = Object.keys(rec).sort();
+  let best=null;
+  for(const k of keys){ if(k<=dateISO) best=k; else break; }
+  return best ? rec[best] : null;
+}
+function lastDayOfMonthISO(y,m){ return dateISO(y,m,new Date(y,m,0).getDate()); }
+function daysInMonthCount(y,m){ return new Date(y,m,0).getDate(); }
+function datesInMonth(y,m){
+  const n = daysInMonthCount(y,m); const out=[];
+  for(let d=1; d<=n; d++) out.push(dateISO(y,m,d));
+  return out;
+}
+
+// 宿泊日基準: for each offset (days before month-end), the cumulative total across all nights
+// in that month, using the state as observed on that calendar date.
+function stayBasisSeries(y, m, maxOffset){
+  const monthEnd = lastDayOfMonthISO(y,m);
+  const nights = datesInMonth(y,m);
+  const out = [];
+  for(let off=maxOffset; off>=0; off--){
+    const asOf = addDaysISO(monthEnd, -off);
+    let rooms=0, sales=0, any=false;
+    nights.forEach(n=>{
+      const v = valueAsOf(state.allData[n], asOf);
+      if(v){ rooms+=v.rooms; sales+=v.sales; any=true; }
+    });
+    out.push({offset:off, date:asOf, rooms: any?rooms:null, sales: any?sales:null});
+  }
+  return out;
+}
+
+// 予約日基準: cumulative NEW business received during the display window, regardless of which
+// month those bookings are for (a booking-pace / production curve, not an on-the-books curve).
+function reservationBasisSeries(y, m, maxOffset){
+  const monthEnd = lastDayOfMonthISO(y,m);
+  const fromISO = addDaysISO(monthEnd, -maxOffset);
+  const toISO = monthEnd;
+  const deltaByDate = new Map();
+  Object.keys(state.allData).forEach(night=>{
+    const rec = state.allData[night];
+    const keys = Object.keys(rec).sort();
+    let prevRooms=0, prevSales=0;
+    keys.forEach(k=>{
+      const cur = rec[k];
+      const dRooms = cur.rooms - prevRooms, dSales = cur.sales - prevSales;
+      if(k>=fromISO && k<=toISO){
+        const e = deltaByDate.get(k) || {rooms:0, sales:0};
+        e.rooms += dRooms; e.sales += dSales;
+        deltaByDate.set(k, e);
+      }
+      prevRooms = cur.rooms; prevSales = cur.sales;
+    });
+  });
+  const out = []; let cumRooms=0, cumSales=0;
+  for(let off=maxOffset; off>=0; off--){
+    const asOf = addDaysISO(monthEnd, -off);
+    if(deltaByDate.has(asOf)){
+      const e = deltaByDate.get(asOf);
+      cumRooms += e.rooms; cumSales += e.sales;
+    }
+    out.push({offset:off, date:asOf, rooms:cumRooms, sales:cumSales});
+  }
+  return out;
+}
+
+// Finds the most recent (year, month) present in the loaded data — this is the "import month"
+// that anchors all three 6-month comparison windows below.
+function getLatestDataMonth(){
+  const keys = Object.keys(state.allData).sort();
+  if(!keys.length) return null;
+  const last = keys[keys.length-1];
+  return { y: Number(last.slice(0,4)), m: Number(last.slice(5,7)) };
+}
+
+// Steps a (year, month) pair forward/backward by n months, handling year rollover.
+function stepMonth(y, m, n){
+  let total = (y*12 + (m-1)) + n;
+  const ny = Math.floor(total/12);
+  const nm = (total%12)+1;
+  return { y: ny, m: nm };
+}
+
+// The three 6-month windows described by the user, computed directly from the SELECTED (year, month).
+// Each group is confined to a SINGLE calendar year — if the natural 6-month window would cross into
+// a different year, it is clipped (shortened) rather than allowed to spill over, so 前年度/前々年度
+// never show a year that could be confused with 今年度's year.
+//  ① this fiscal year's most recent months, ending at the selected month, clipped to selY
+//  ② last fiscal year's "complementary" months (the other part of the year), clipped to (selY-1)
+//  ③ the year before that, same complementary window, clipped to (selY-2)
+function computeSixMonthGroups(selY, selM){
+  const groupA = [];
+  for(let mm=selM; mm>=1 && groupA.length<6; mm--){ groupA.unshift({y:selY, m:mm}); }
+
+  const startM = stepMonth(selY, selM, 1).m; // month-only; year intentionally discarded
+  const groupB = [];
+  for(let mm=startM; mm<=12 && groupB.length<6; mm++){ groupB.push({y:selY-1, m:mm}); }
+
+  const groupC = [];
+  for(let mm=startM; mm<=12 && groupC.length<6; mm++){ groupC.push({y:selY-2, m:mm}); }
+
+  return { groupA, groupB, groupC };
+}
+
+function monthTotalsLatest(y,m){
+  let rooms=0, sales=0;
+  datesInMonth(y,m).forEach(n=>{
+    const rec = state.allData[n];
+    if(!rec) return;
+    const keys = Object.keys(rec).sort();
+    if(!keys.length) return;
+    const v = rec[keys[keys.length-1]];
+    rooms += v.rooms; sales += v.sales;
+  });
+  return {rooms, sales};
+}
+
+state.mr3Metric = 'sales'; // 'sales' | 'rooms' — for the 3-period 6-month comparison chart
+state.mr3ShowGross = false;
+let mrChart = null;
+
+function mrSet3Metric(m){
+  state.mr3Metric = m;
+  document.getElementById('mr3MetricSales').classList.toggle('active', m==='sales');
+  document.getElementById('mr3MetricRooms').classList.toggle('active', m==='rooms');
+  renderMonthlyReport();
+}
+document.getElementById('mr3MetricSales').addEventListener('click', ()=>mrSet3Metric('sales'));
+document.getElementById('mr3MetricRooms').addEventListener('click', ()=>mrSet3Metric('rooms'));
+document.getElementById('mr3ShowGrossToggle').addEventListener('change', (e)=>{
+  state.mr3ShowGross = e.target.checked;
+  renderMonthlyReport();
+});
+
+function renderMonthlyReport(){
+  const sel = document.getElementById('mrMonthSelect');
+  const ym = sel.value;
+  const emptyEl = document.getElementById('mrEmpty');
+  const bodyEl = document.getElementById('mrBody');
+  if(!ym){ emptyEl.style.display='block'; bodyEl.style.display='none'; return; }
+  emptyEl.style.display='none'; bodyEl.style.display='block';
+
+  const [selY, selM] = ym.split('-').map(Number);
+  const cap = state.settings.capacity || 68;
+  const { groupA, groupB, groupC } = computeSixMonthGroups(selY, selM);
+
+  // ---- KPIs: the selected month vs the same month last year ----
+  const kpiMonth = groupA[groupA.length-1]; // = the selected month itself
+  const kpiPrior = stepMonth(kpiMonth.y, kpiMonth.m, -12);
+  const nightsThis = datesInMonth(kpiMonth.y, kpiMonth.m);
+  const nightsPrior = datesInMonth(kpiPrior.y, kpiPrior.m);
+  const curTotals = monthTotalsLatest(kpiMonth.y, kpiMonth.m);
+  const priorTotals = monthTotalsLatest(kpiPrior.y, kpiPrior.m);
+  const occCur = cap ? Math.round(curTotals.rooms/(cap*nightsThis.length)*100) : 0;
+  const adrCur = curTotals.rooms>0 ? curTotals.sales/curTotals.rooms : 0;
+  const adrPrior = priorTotals.rooms>0 ? priorTotals.sales/priorTotals.rooms : 0;
+  const revparCur = cap ? curTotals.sales/(cap*nightsThis.length) : 0;
+  const revparPrior = cap ? priorTotals.sales/(cap*nightsPrior.length) : 0;
+  const salesYoy = priorTotals.sales>0 ? Math.round(curTotals.sales/priorTotals.sales*100) : null;
+  const roomsYoy = priorTotals.rooms>0 ? Math.round(curTotals.rooms/priorTotals.rooms*100) : null;
+
+  document.getElementById('mrKpiSub').textContent = `対象月: ${kpiMonth.y}年${kpiMonth.m}月(前年同月: ${kpiPrior.y}年${kpiPrior.m}月)`;
+  document.getElementById('mrKpis').innerHTML = `
+    <div class="kpi"><div class="v">¥${Math.round(curTotals.sales).toLocaleString()}</div><div class="l">売上</div></div>
+    <div class="kpi"><div class="v">${salesYoy!=null?salesYoy+'%':'-'}</div><div class="l">売上 前年比</div></div>
+    <div class="kpi"><div class="v">${curTotals.rooms}室 (${occCur}%)</div><div class="l">販売客室数(稼働率)</div></div>
+    <div class="kpi"><div class="v">${roomsYoy!=null?roomsYoy+'%':'-'}</div><div class="l">客室数 前年比</div></div>
+    <div class="kpi"><div class="v">¥${Math.round(revparCur).toLocaleString()}</div><div class="l">RevPAR(今年)</div></div>
+    <div class="kpi"><div class="v">¥${Math.round(revparPrior).toLocaleString()}</div><div class="l">RevPAR(前年同時期)</div></div>
+    <div class="kpi"><div class="v">¥${Math.round(adrCur).toLocaleString()}</div><div class="l">ADR(今年)</div></div>
+    <div class="kpi"><div class="v">¥${Math.round(adrPrior).toLocaleString()}</div><div class="l">ADR(前年同時期)</div></div>
+  `;
+
+  // ---- chart: 3 six-month series, now at DAILY granularity (every day across the 6 months) ----
+  const metricKey = state.mr3Metric;
+  const unit = metricKey==='sales' ? '円' : '室';
+
+  function dayListFor(group){
+    const days = [];
+    group.forEach(({y,m})=>{ datesInMonth(y,m).forEach(iso=>days.push(iso)); });
+    return days;
+  }
+  function dayActual(dateISO, key){
+    const rec = state.allData[dateISO];
+    if(!rec) return null;
+    const keys = Object.keys(rec).sort();
+    if(!keys.length) return null;
+    return rec[keys[keys.length-1]][key];
+  }
+  function dayActualGross(dateISO, key){
+    const rec = state.allDataGross && state.allDataGross[dateISO];
+    if(!rec) return null;
+    const keys = Object.keys(rec).sort();
+    if(!keys.length) return null;
+    return rec[keys[keys.length-1]][key];
+  }
+  function seriesFor(group){
+    return dayListFor(group).map(iso=>({ date: iso, value: dayActual(iso, metricKey) }));
+  }
+  function seriesForGross(group){
+    return dayListFor(group).map(iso=>({ date: iso, value: dayActualGross(iso, metricKey) }));
+  }
+  const dataA = seriesFor(groupA);
+  const dataB = seriesFor(groupB);
+  const dataC = seriesFor(groupC);
+  const dataAGross = state.mr3ShowGross ? seriesForGross(groupA) : null;
+  const maxLen = Math.max(dataA.length, dataB.length, dataC.length);
+  const labels = Array.from({length:maxLen}, (_,i)=>{
+    const ref = dataA[i] || dataB[i] || dataC[i];
+    if(!ref) return '';
+    const [yy,mm,dd] = ref.date.split('-');
+    return `${Number(mm)}/${Number(dd)}`;
+  });
+
+  document.getElementById('mrChartSub').textContent =
+    `選択月(${selY}年${selM}月)を起点に自動算出。緑=今年度(${groupA[0].y}年${groupA[0].m}月〜${groupA[groupA.length-1].y}年${groupA[groupA.length-1].m}月)　灰=前年度(${groupB[0].y}年${groupB[0].m}月〜${groupB[groupB.length-1].y}年${groupB[groupB.length-1].m}月)　青=前々年度(${groupC[0].y}年${groupC[0].m}月〜${groupC[groupC.length-1].y}年${groupC[groupC.length-1].m}月) — 日単位で表示。同じ位置の日同士を比較し、この先6ヶ月の室料設定の参考にできます。`;
+
+  if(mrChart) mrChart.destroy();
+  const ctx = document.getElementById('mrChart').getContext('2d');
+  function toChartData(series){
+    const arr = series.map(p=>p.value);
+    while(arr.length<maxLen) arr.push(null);
+    return arr;
+  }
+  const dataAArr = toChartData(dataA);
+  const dataBArr = toChartData(dataB);
+  const dataCArr = toChartData(dataC);
+  const dataAGrossArr = dataAGross ? toChartData(dataAGross) : null;
+  // pacing forecast: extend 今年度(A) forward using 前年度(B)'s shape, for any position A has no data yet
+  const lastKnownIdx = (()=>{ let idx=-1; dataAArr.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
+  const lastKnownVal = lastKnownIdx>=0 ? dataAArr[lastKnownIdx] : 0;
+  const bAtLastKnown = lastKnownIdx>=0 ? dataBArr[lastKnownIdx] : null;
+  const forecastArr = dataAArr.map((v,i)=>{
+    if(v!=null) return null;
+    if(bAtLastKnown && dataBArr[i]!=null && bAtLastKnown>0){
+      return lastKnownVal * (dataBArr[i]/bAtLastKnown);
+    }
+    return null;
+  });
+  if(lastKnownIdx>=0 && forecastArr.length>lastKnownIdx) forecastArr[lastKnownIdx] = lastKnownVal;
+
+  const labelC = groupC[0] ? `${groupC[0].y}年` : '前々年度';
+  const labelB = groupB[0] ? `${groupB[0].y}年` : '前年度';
+  const labelA = groupA[0] ? `${groupA[0].y}年` : '今年度';
+
+  const datasets = [
+    { label:labelC, data:dataCArr, borderColor:'#3E5C74', backgroundColor:'transparent', pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true },
+    { label:labelB, data:dataBArr, borderColor:'#9096A3', backgroundColor:'transparent', pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true },
+    { label:labelA, data:dataAArr, borderColor:'#4A7A6B', backgroundColor:'#4A7A6B15', pointRadius:0, borderWidth:2, tension:0.1, spanGaps:true, fill:true },
+    { label:'着地予測', data:forecastArr, borderColor:'#B08D57', backgroundColor:'transparent', borderDash:[5,4], pointRadius:0, tension:0.1, spanGaps:true }
+  ];
+  if(dataAGrossArr){
+    datasets.push({ label:`${labelA} 総需要(キャンセル込み)`, data:dataAGrossArr, borderColor:'#8A4A52', backgroundColor:'transparent', borderDash:[2,2], pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true });
+  }
+
+  mrChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets
+    },
+    options:{
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2,
+      plugins:{
+        legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
+        tooltip:{
+          mode:'index', intersect:false,
+          callbacks:{
+            label:(c)=>{
+              if(c.datasetIndex===3){
+                return c.formattedValue==null ? `${c.dataset.label}: -` : `${c.dataset.label}: ${unit==='円'?'¥':''}${Number(c.raw).toLocaleString()}${unit==='室'?'室':''}`;
+              }
+              if(c.datasetIndex===4 && dataAGross){
+                const p = dataAGross[c.dataIndex];
+                if(!p || p.value==null) return `${c.dataset.label}: -`;
+                const [yy,mm,dd] = p.date.split('-');
+                const label = `${yy}年${Number(mm)}月${Number(dd)}日`;
+                return unit==='円' ? `${c.dataset.label}(${label}): ¥${Number(p.value).toLocaleString()}` : `${c.dataset.label}(${label}): ${p.value}室`;
+              }
+              const series = c.datasetIndex===0?dataC:c.datasetIndex===1?dataB:dataA;
+              const p = series[c.dataIndex];
+              if(!p || p.value==null) return `${c.dataset.label}: -`;
+              const [yy,mm,dd] = p.date.split('-');
+              const label = `${yy}年${Number(mm)}月${Number(dd)}日`;
+              return unit==='円' ? `${c.dataset.label}(${label}): ¥${Number(p.value).toLocaleString()}` : `${c.dataset.label}(${label}): ${p.value}室`;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true, maxTicksLimit:24, font:{size:9.5}} },
+        y:{ beginAtZero:true, grid:{color:'#E9EBEF'} }
+      }
+    }
+  });
+}
+
+// ---------- 月別ブッキングカーブ(180〜0日): month-picker driven, restored alongside the 3-period chart ----------
+function populateMrMonthSelect(){
+  const sel = document.getElementById('mrMonthSelect');
+  const prev = sel.value;
+  const months = [...new Set(Object.keys(state.allData).map(iso=>iso.slice(0,7)))].sort();
+  sel.innerHTML = '<option value="">-- 月を選択 --</option>' +
+    months.map(ym=>{ const [y,m]=ym.split('-').map(Number); return `<option value="${ym}">${y}年${m}月</option>`; }).join('');
+  if(months.includes(prev)) sel.value = prev;
+  else if(months.length) sel.value = months[months.length-1];
+}
+
+state.mrBasis = 'stay';       // 'stay' | 'reservation'
+state.mrDayMetric = 'sales';  // 'sales' | 'rooms'
+let mrDayChart = null;
+
+function mrSetBasis(b){
+  state.mrBasis = b;
+  document.getElementById('mrBasisStay').classList.toggle('active', b==='stay');
+  document.getElementById('mrBasisReservation').classList.toggle('active', b==='reservation');
+  renderMonthlyDayCurve();
+}
+function mrSetDayMetric(m){
+  state.mrDayMetric = m;
+  document.getElementById('mrDayMetricSales').classList.toggle('active', m==='sales');
+  document.getElementById('mrDayMetricRooms').classList.toggle('active', m==='rooms');
+  renderMonthlyDayCurve();
+}
+document.getElementById('mrBasisStay').addEventListener('click', ()=>mrSetBasis('stay'));
+document.getElementById('mrBasisReservation').addEventListener('click', ()=>mrSetBasis('reservation'));
+document.getElementById('mrDayMetricSales').addEventListener('click', ()=>mrSetDayMetric('sales'));
+document.getElementById('mrDayMetricRooms').addEventListener('click', ()=>mrSetDayMetric('rooms'));
+document.getElementById('mrDaysSelect').addEventListener('change', renderMonthlyDayCurve);
+document.getElementById('mrMonthSelect').addEventListener('change', ()=>{ renderMonthlyReport(); renderMonthlyDayCurve(); });
+
+function renderMonthlyDayCurve(){
+  const sel = document.getElementById('mrMonthSelect');
+  const ym = sel.value;
+  const emptyEl = document.getElementById('mrDayEmpty');
+  const bodyEl = document.getElementById('mrDayBody');
+  if(!ym){ emptyEl.style.display='block'; bodyEl.style.display='none'; return; }
+  emptyEl.style.display='none'; bodyEl.style.display='block';
+
+  const [y,m] = ym.split('-').map(Number);
+  const priorY = y-1;
+  const prior2Y = y-2;
+  const maxOffset = Number(document.getElementById('mrDaysSelect').value);
+
+  const buildFn = state.mrBasis==='stay' ? stayBasisSeries : reservationBasisSeries;
+  const curSeries = buildFn(y, m, maxOffset);
+  const priorSeries = buildFn(priorY, m, maxOffset);
+  const prior2Series = buildFn(prior2Y, m, maxOffset);
+  const metricKey = state.mrDayMetric;
+  const unit = metricKey==='sales' ? '円' : '室';
+
+  const labels = curSeries.map(p=>{ const [yy,mm,dd]=p.date.split('-'); return `${Number(mm)}/${Number(dd)}`; });
+  const curData = curSeries.map(p=>p[metricKey]);
+  const priorData = priorSeries.map(p=>p[metricKey]);
+  const prior2Data = prior2Series.map(p=>p[metricKey]);
+  // simple pacing forecast line: extends the current series forward using the prior-year shape for
+  // any offsets where this year has no data yet (i.e., still in the future)
+  const lastKnownIdx = (()=>{ let idx=-1; curData.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
+  const lastKnownVal = lastKnownIdx>=0 ? curData[lastKnownIdx] : 0;
+  const priorAtLastKnown = lastKnownIdx>=0 ? priorData[lastKnownIdx] : null;
+  const forecastData = curData.map((v,i)=>{
+    if(v!=null) return null;
+    if(priorAtLastKnown && priorData[i]!=null && priorAtLastKnown>0){
+      return lastKnownVal * (priorData[i]/priorAtLastKnown);
+    }
+    return null;
+  });
+  if(lastKnownIdx>=0 && forecastData.length>lastKnownIdx) forecastData[lastKnownIdx] = lastKnownVal;
+
+  document.getElementById('mrDayChartSub').textContent =
+    `${state.mrBasis==='stay' ? '宿泊日基準' : '予約日基準'} / ${metricKey==='sales'?'売上':'販売客室数'} — 青:${prior2Y}年${m}月　灰:${priorY}年${m}月　緑:${y}年${m}月　黄:着地予測`;
+
+  if(mrDayChart) mrDayChart.destroy();
+  const ctx = document.getElementById('mrDayChart').getContext('2d');
+  mrDayChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        { label:`${prior2Y}年${m}月`, data:prior2Data, borderColor:'#3E5C74', backgroundColor:'transparent', pointRadius:0, tension:0.1, spanGaps:true },
+        { label:`${priorY}年${m}月`, data:priorData, borderColor:'#9096A3', backgroundColor:'transparent', pointRadius:0, tension:0.1, spanGaps:true },
+        { label:`${y}年${m}月`, data:curData, borderColor:'#4A7A6B', backgroundColor:'#4A7A6B15', pointRadius:0, tension:0.1, spanGaps:true, fill:true },
+        { label:'着地予測', data:forecastData, borderColor:'#B08D57', backgroundColor:'transparent', borderDash:[5,4], pointRadius:0, tension:0.1, spanGaps:true }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2,
+      plugins:{
+        legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
+        tooltip:{
+          mode:'index', intersect:false,
+          callbacks:{ label:(c)=> c.formattedValue==null ? `${c.dataset.label}: -` : `${c.dataset.label}: ${unit==='円'?'¥':''}${Number(c.raw).toLocaleString()}${unit==='室'?'室':''}` }
+        }
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true, maxTicksLimit:16, font:{size:10}} },
+        y:{ beginAtZero:true, grid:{color:'#E9EBEF'} }
+      }
+    }
+  });
+}
+
+// ---------- calendar ----------
+const DOWS = ['日','月','火','水','木','金','土'];
+function dowRowHtml(){
+  return DOWS.map((d,i)=>`<div class="dow ${i===0?'sun':i===6?'sat':''}">${d}</div>`).join('');
+}
+[0,1,2].forEach(i=>{ document.getElementById('dowRow'+i).innerHTML = dowRowHtml(); });
+
+document.getElementById('prevMonth').addEventListener('click', ()=>{
+  if(state.curMonth==null) return;
+  state.curMonth--; if(state.curMonth<1){state.curMonth=12; state.curYear--;}
+  renderCalendar();
+});
+document.getElementById('nextMonth').addEventListener('click', ()=>{
+  if(state.curMonth==null) return;
+  state.curMonth++; if(state.curMonth>12){state.curMonth=1; state.curYear++;}
+  renderCalendar();
+});
+
+function valueNearDate(stayISO, targetISO){
+  const rec = state.allData[stayISO];
+  if(!rec) return null;
+  const keys = Object.keys(rec);
+  if(!keys.length) return null;
+  let best=null, bestDist=Infinity;
+  keys.forEach(k=>{
+    const dist = Math.abs(new Date(k+'T00:00:00') - new Date(targetISO+'T00:00:00'));
+    if(dist<bestDist){ bestDist=dist; best=k; }
+  });
+  return rec[best];
+}
+
+// Compares the latest known value against the value ~windowDays earlier (nearest available snapshot),
+// so "7日前比較"/"1日前比較" reflect an actual date gap rather than just "whatever the previous upload was".
+function calendarDiff(stayISO, windowDays){
+  const rec = state.allData[stayISO];
+  if(!rec) return {latest:null, diff:null, salesDiff:null};
+  const keys = Object.keys(rec).sort();
+  if(!keys.length) return {latest:null, diff:null, salesDiff:null};
+  const latestKey = keys[keys.length-1];
+  const latest = rec[latestKey];
+  const targetISO = addDaysISO(latestKey, -windowDays);
+  const compare = valueNearDate(stayISO, targetISO);
+  const diff = compare ? latest.rooms - compare.rooms : null;
+  const salesDiff = compare ? latest.sales - compare.sales : null;
+  return {latest, diff, salesDiff};
+}
+
+// "both" mode: same latest value, but returns both the 1-day and 7-day diffs together (rooms + sales)
+function calendarDiffBoth(stayISO){
+  const rec = state.allData[stayISO];
+  if(!rec) return {latest:null, diff1:null, diff7:null, salesDiff1:null, salesDiff7:null};
+  const keys = Object.keys(rec).sort();
+  if(!keys.length) return {latest:null, diff1:null, diff7:null, salesDiff1:null, salesDiff7:null};
+  const latestKey = keys[keys.length-1];
+  const latest = rec[latestKey];
+  const c1 = valueNearDate(stayISO, addDaysISO(latestKey, -1));
+  const c7 = valueNearDate(stayISO, addDaysISO(latestKey, -7));
+  return {
+    latest,
+    diff1: c1 ? latest.rooms-c1.rooms : null, diff7: c7 ? latest.rooms-c7.rooms : null,
+    salesDiff1: c1 ? latest.sales-c1.sales : null, salesDiff7: c7 ? latest.sales-c7.sales : null
+  };
+}
+
+// Flexible 万円/円 formatter: uses 万円 (1 decimal) once the amount is large enough that raw yen
+// would be hard to read at a glance, otherwise shows plain yen with thousands separators.
+function formatYenFlexible(v){
+  const sign = v>0 ? '+' : v<0 ? '-' : '';
+  const abs = Math.abs(v);
+  if(abs >= 10000){
+    const man = abs/10000;
+    const manStr = man>=100 ? Math.round(man).toString() : man.toFixed(1).replace(/\.0$/,'');
+    return `${sign}${manStr}万円`;
+  }
+  return `${sign}${Math.round(abs).toLocaleString()}円`;
+}
+
+
+state.calDiffWindow = 7; // 7 | 1 | 'both'
+function setDiffWindow(w){
+  state.calDiffWindow = w;
+  document.getElementById('diffWindow7').classList.toggle('active', w===7);
+  document.getElementById('diffWindow1').classList.toggle('active', w===1);
+  document.getElementById('diffWindowBoth').classList.toggle('active', w==='both');
+  renderCalendar();
+}
+document.getElementById('diffWindow7').addEventListener('click', ()=>setDiffWindow(7));
+document.getElementById('diffWindow1').addEventListener('click', ()=>setDiffWindow(1));
+document.getElementById('diffWindowBoth').addEventListener('click', ()=>setDiffWindow('both'));
+
+function renderCalendar(){
+  if(state.curYear==null || state.curMonth==null){
+    // pick most recent stayISO available, else current month
+    const keys = Object.keys(state.allData).sort();
+    if(keys.length){
+      const [y,m] = keys[keys.length-1].split('-').map(Number);
+      state.curYear=y; state.curMonth=m;
+    } else {
+      const now = new Date();
+      state.curYear = now.getFullYear(); state.curMonth = now.getMonth()+1;
+    }
+  }
+  const y0=state.curYear, m0=state.curMonth;
+  let y2=y0, m2=m0+2; while(m2>12){ m2-=12; y2++; }
+  document.getElementById('monthTitle').textContent = `${y0}年${m0}月 〜 ${y2}年${m2}月`;
+
+  const cap = state.settings.capacity || 68;
+  const diffScaleMax = Math.max(5, Math.round(cap*0.2)); // a swing of ~20% of capacity = full color intensity
+  let anyDataAny = false;
+
+  for(let off=0; off<3; off++){
+    let y=y0, m=m0+off; while(m>12){ m-=12; y++; }
+    const col = document.querySelector(`#cal3col .cal-month-col:nth-child(${off+1})`);
+    let label = col.querySelector('.month-label');
+    if(!label){ label = document.createElement('div'); label.className='month-label'; col.insertBefore(label, col.firstChild); }
+    label.textContent = `${y}年${m}月`;
+
+    const firstDow = new Date(y, m-1, 1).getDay();
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const grid = document.getElementById('calGrid'+off);
+    grid.innerHTML='';
+    let anyData=false;
+
+    for(let i=0;i<firstDow;i++){
+      const e=document.createElement('div'); e.className='cell empty'; grid.appendChild(e);
+    }
+    for(let d=1; d<=daysInMonth; d++){
+      const stayISO = dateISO(y,m,d);
+      let latest, diff, diff1, diff7, salesDiff, salesDiff1, salesDiff7;
+      if(state.calDiffWindow==='both'){
+        ({latest, diff1, diff7, salesDiff1, salesDiff7} = calendarDiffBoth(stayISO));
+        diff = diff7; // color by the 7-day figure in combined mode
+      } else {
+        ({latest, diff, salesDiff} = calendarDiff(stayISO, state.calDiffWindow));
+      }
+      const cell = document.createElement('div');
+      cell.className='cell';
+      if(latest){
+        anyData=true; anyDataAny=true;
+        let bg = '#FFFFFF';
+        if(diff!=null && diff!==0){
+          const intensity = Math.max(0, Math.min(1, Math.abs(diff)/diffScaleMax));
+          bg = diff>0 ? mixColor('#FFFFFF', '#8A4A52', intensity*0.9) : mixColor('#FFFFFF', '#3E5C74', intensity*0.9);
+        }
+        cell.style.background = bg;
+        let diffHtml = '';
+        // Simple "+N室" / "+X万円" format throughout. In 7-day-only or 1-day-only mode: one room line +
+        // one sales line. In combined "1日/7日前" mode: both windows shown separately (1日, 7日), each
+        // still just room+sales, with zero entries suppressed.
+        const addLine = (v, unit, prefix, allowZero)=>{
+          if(v==null || (v===0 && !allowZero)) return '';
+          const cls = v>0?'up':v<0?'down':'flat';
+          const txt = unit==='室' ? `${v>0?'+':''}${v}室` : (v===0 ? '0円' : formatYenFlexible(v));
+          return `<div class="diff ${cls}" style="font-size:9px; white-space:nowrap;">${prefix}${txt}</div>`;
+        };
+        if(state.calDiffWindow==='both'){
+          const vals = [diff1, salesDiff1, diff7, salesDiff7];
+          const allZeroOrNull = vals.every(v => v==null || v===0);
+          const showZero = !allZeroOrNull; // only show 0-value lines when something else in the set is non-zero
+          diffHtml += addLine(diff1, '室', '1日 ', showZero);
+          diffHtml += addLine(salesDiff1, '円', '1日 ', showZero);
+          diffHtml += addLine(diff7, '室', '7日 ', showZero);
+          diffHtml += addLine(salesDiff7, '円', '7日 ', showZero);
+        } else {
+          diffHtml += addLine(diff, '室', '', false);
+          diffHtml += addLine(salesDiff, '円', '', false);
+        }
+        const roomsHtml = latest.rooms>0 ? `<div class="rooms">${latest.rooms}</div>` : '';
+        cell.innerHTML = `<div class="d">${d}</div>${roomsHtml}${diffHtml}`;
+      } else {
+        cell.innerHTML = `<div class="d">${d}</div>`;
+      }
+      grid.appendChild(cell);
+    }
+    if(!anyData){
+      // no explicit per-column empty state; overall empty-note below covers the whole 3-month window
+    }
+  }
+  document.getElementById('calEmpty').style.display = anyDataAny ? 'none':'block';
+}
+
+function mixColor(hexA, hexB, t){
+  const a = hexToRgb(hexA), b = hexToRgb(hexB);
+  const r = Math.round(a[0]+(b[0]-a[0])*t);
+  const g = Math.round(a[1]+(b[1]-a[1])*t);
+  const bl = Math.round(a[2]+(b[2]-a[2])*t);
+  return `rgb(${r},${g},${bl})`;
+}
+function hexToRgb(hex){
+  hex = hex.replace('#','');
+  return [parseInt(hex.slice(0,2),16), parseInt(hex.slice(2,4),16), parseInt(hex.slice(4,6),16)];
+}
+
+// ---------- init ----------
+(async function init(){
+  try{
+    await loadAll();
+  }catch(e){
+    console.error('loadAll failed', e);
+  }
+  renderCalendar();
+  populateMrMonthSelect(); renderMonthlyDayCurve();
+  renderMonthlyReport();
+  if(Object.keys(state.allData).length){
+    setStatus(`サーバーから読み込みました(${Object.keys(state.allData).length}日分、全利用者共通データ)。`, 'ok');
+  } else {
+    setStatus('サーバーに接続しました。まだデータがありません。', 'ok');
+  }
+  checkIncomingCSVs(); // pick up anything the Lincoln bookmarklet posted while the app was closed
+})();
+</script>
+</body>
+</html>
