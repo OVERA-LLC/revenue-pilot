@@ -825,23 +825,9 @@ async function checkIncomingCSVs(){
       await fetch(API_BASE + '/csv/incoming/' + encodeURIComponent(filename), {method:'DELETE'});
     }
 
-    // also pick up any pending 予約番号ベース data (from the Lincoln search-results scrape),
-    // which runs alongside the CSV path rather than replacing it
-    const resListRes = await apiGet('/reservations/incoming');
-    const resFiles = resListRes.files || [];
-    let resTotalPoints = 0;
-    const resTotalDates = new Set();
-    for(const filename of resFiles){
-      const jsonRes = await fetch(API_BASE + '/reservations/incoming/' + encodeURIComponent(filename));
-      if(!jsonRes.ok) continue;
-      const events = await jsonRes.json();
-      const result = parseReservationEvents(events);
-      resTotalPoints += result.points;
-      result.stayDates.forEach(d=>resTotalDates.add(d));
-      if(result.flatPoints.length) await pushPoints(result.flatPoints);
-      if(result.flatPointsGross && result.flatPointsGross.length) await pushPointsGross(result.flatPointsGross);
-      await fetch(API_BASE + '/reservations/incoming/' + encodeURIComponent(filename), {method:'DELETE'});
-    }
+    // NOTE: 予約番号ベースのデータ取込は現在デバッグ中のため、一時的に無効化しています。
+    // (CSVの正しいデータを不完全な計算結果で上書きしてしまう不具合が見つかったため)
+    // 保留中のファイルはサーバー上にそのまま残しており、削除も処理もしていません。
 
     // always refresh from the server too, whether or not any pending data was found,
     // so this same action also works as a general "get latest info" button
@@ -850,10 +836,9 @@ async function checkIncomingCSVs(){
     populateMrMonthSelect(); renderMonthlyDayCurve();
     renderMonthlyReport();
 
-    const totalFiles = files.length + resFiles.length;
+    const totalFiles = files.length;
     if(totalFiles){
-      const allDates = new Set([...totalDates, ...resTotalDates]);
-      setStatus(`保留データを${totalFiles}件取り込みました(${allDates.size}日分、${totalPoints+resTotalPoints}件のスナップショット)。`, 'ok');
+      setStatus(`保留CSVを${totalFiles}件取り込みました(${totalDates.size}日分、${totalPoints}件のスナップショット)。`, 'ok');
     } else {
       setStatus('最新データを取得しました(保留中のデータはありませんでした)。', 'ok');
     }
