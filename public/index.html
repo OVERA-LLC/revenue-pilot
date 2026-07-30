@@ -324,7 +324,7 @@
 
 <script>
 const COLS = ['曜日','日','ランク','室数','人数合計','大人','子供','室料','稼働率','DOR','ADR','RevPAR','売止'];
-const state = { allData:{}, settings:{capacity:68}, settingsLoaded:false, curMonth:null, curYear:null, curStayISO:null };
+const state = { allData:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null };
 let charts = [];
 
 function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
@@ -358,14 +358,16 @@ async function apiDelete(pathSuffix){
 }
 
 // Pull the latest full dataset from the server (picks up other users' uploads too).
-let pendingSettingsSave = Promise.resolve();
-
 async function loadAll(){
-  await pendingSettingsSave; // never read settings back while a save is still in flight
   state.allData = await apiGet('/data');
   const savedSettings = await apiGet('/settings');
-  if(savedSettings && savedSettings.capacity) state.settings = savedSettings;
-  document.getElementById('capacity').value = state.settings.capacity || 68;
+  // While a local capacity edit is being saved (or was just saved), NEVER let a server
+  // fetch overwrite it — no matter how the timing lines up. This is the one field the
+  // user edits directly outside of an import, so it needs its own guard.
+  if(!state.capacityLocalPending){
+    if(savedSettings && savedSettings.capacity) state.settings = savedSettings;
+    document.getElementById('capacity').value = state.settings.capacity || 68;
+  }
   state.settingsLoaded = true;
   updateCapNote();
 }
@@ -384,15 +386,23 @@ function updateCapNote(){
 }
 
 // Editing the 総客室数 field directly (without running an import) should also take effect
-// immediately: update the header note right away, then persist it to the server.
-document.getElementById('capacity').addEventListener('change', ()=>{
+// immediately: update the header note right away, then persist it to the server. The
+// capacityLocalPending flag stays true for the whole save so a concurrent "最新情報取得"
+// click can never reset the field back to a stale server value mid-save.
+document.getElementById('capacity').addEventListener('change', async ()=>{
   const v = parseInt(document.getElementById('capacity').value, 10);
   if(!v || v<=0) return;
   state.settings.capacity = v;
+  state.capacityLocalPending = true;
   updateCapNote();
-  pendingSettingsSave = saveSettings()
-    .then(()=>{ renderCalendar(); })
-    .catch(e=>console.error('capacity save failed', e));
+  try{
+    await saveSettings();
+  }catch(e){
+    console.error('capacity save failed', e);
+  }finally{
+    state.capacityLocalPending = false;
+  }
+  renderCalendar();
 });
 
 // ---------- excel parsing ----------
