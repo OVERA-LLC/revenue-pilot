@@ -129,6 +129,9 @@
   .collapsible.collapsed .collapsible-head .chev{ transform:rotate(-90deg); }
   .collapsible.collapsed .collapsible-body{ display:none; }
   .collapsible-head:hover{ opacity:.75; }
+  .drag-handle{ cursor:grab; color:var(--ink-soft); margin-right:6px; font-size:14px; }
+  .draggable-section.drag-over{ outline:2px dashed var(--coral); outline-offset:2px; }
+  .draggable-section.dragging{ opacity:.4; }
 </style>
 </head>
 <body>
@@ -207,40 +210,58 @@
     <div id="calEmpty" class="empty-note" style="display:none;">この期間のデータがまだありません。Excelを取り込んでください。</div>
   </div>
 
-  <div class="card" id="monthlyReportCard">
-    <h2>月次実績</h2>
-    <div class="row" style="margin-bottom:14px;">
-      <div>
-        <label>対象月</label>
-        <select id="mrMonthSelect" style="min-width:140px;">
-          <option value="">-- 月を選択 --</option>
-        </select>
+  <div id="reorderableSections">
+  <div class="card collapsible draggable-section" id="section-monthly" draggable="true">
+    <h2 class="collapsible-head" data-target="mrBody"><span><span class="drag-handle">⠿</span> 月次実績</span> <span class="chev">▾</span></h2>
+    <div class="collapsible-body" id="mrBody">
+      <div class="row" style="margin-bottom:14px; align-items:flex-end;">
+        <div>
+          <label>基準日(年・月・日)</label>
+          <input type="date" id="mrRefDate" style="min-width:150px;">
+        </div>
+        <button class="ghost" id="mrPrevMonth" type="button">‹ 前月</button>
+        <button class="ghost" id="mrNextMonth" type="button">翌月 ›</button>
+      </div>
+      <div id="mrEmpty" class="empty-note">基準日を選択すると実績が表示されます。</div>
+      <div id="mrBodyInner" style="display:none;">
+        <div class="curve-sub" id="mrKpiSub"></div>
+        <div class="kpis" id="mrKpis" style="margin-bottom:18px;"></div>
+
+        <h3 style="margin:0 0 6px; font-size:13px; color:var(--navy);">今年度・前年度・前々年度 6ヶ月比較</h3>
+        <div class="row" style="margin-bottom:10px; gap:18px;">
+          <div>
+            <label>表示データ</label>
+            <div class="row" style="gap:4px;">
+              <button class="ghost diff-toggle active" id="mr3MetricSales" type="button">売上</button>
+              <button class="ghost diff-toggle" id="mr3MetricRooms" type="button">販売客室数</button>
+            </div>
+          </div>
+          <label style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+            <input type="checkbox" id="mr3ShowGrossToggle" style="width:auto;">
+            <span style="font-size:11.5px; color:var(--ink-soft);">今年度の総需要(キャンセル込み)も表示</span>
+          </label>
+        </div>
+        <div class="curve-sub" id="mrChartSub"></div>
+        <div class="chart-block chart-block-primary"><canvas id="mrChart"></canvas></div>
       </div>
     </div>
-    <div id="mrEmpty" class="empty-note">月を選択すると実績が表示されます。</div>
-    <div id="mrBody" style="display:none;">
-      <div class="curve-sub" id="mrKpiSub"></div>
-      <div class="kpis" id="mrKpis" style="margin-bottom:18px;"></div>
+  </div>
 
-      <h3 style="margin:0 0 6px; font-size:13px; color:var(--navy);">今年度・前年度・前々年度 6ヶ月比較</h3>
-      <div class="row" style="margin-bottom:10px; gap:18px;">
-        <div>
-          <label>表示データ</label>
-          <div class="row" style="gap:4px;">
-            <button class="ghost diff-toggle active" id="mr3MetricSales" type="button">売上</button>
-            <button class="ghost diff-toggle" id="mr3MetricRooms" type="button">販売客室数</button>
-          </div>
+  <div class="card collapsible draggable-section" id="section-daycurve" draggable="true">
+    <h2 class="collapsible-head" data-target="mrDayCollapseBody"><span><span class="drag-handle">⠿</span> <span id="mrDayHeader">月別ブッキングカーブ(180〜0日)</span></span> <span class="chev">▾</span></h2>
+    <div class="collapsible-body" id="mrDayCollapseBody">
+      <div class="cal-head" style="margin-bottom:10px;">
+        <div class="row" style="align-items:center; gap:8px;">
+          <button class="ghost" id="mrDayPrevMonth" type="button">‹</button>
+          <div class="month-title" id="mrDayMonthTitle">-</div>
+          <button class="ghost" id="mrDayNextMonth" type="button">›</button>
         </div>
-        <label style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-          <input type="checkbox" id="mr3ShowGrossToggle" style="width:auto;">
-          <span style="font-size:11.5px; color:var(--ink-soft);">今年度の総需要(キャンセル込み)も表示</span>
-        </label>
+        <div>
+          <label style="font-size:10.5px;">実データの基準日(この日までが実績)</label>
+          <input type="date" id="mrDayRefDate" style="min-width:150px;">
+        </div>
       </div>
-      <div class="curve-sub" id="mrChartSub"></div>
-      <div class="chart-block chart-block-primary"><canvas id="mrChart"></canvas></div>
-
-      <h3 style="margin:24px 0 10px; font-size:13px; color:var(--navy);">月別ブッキングカーブ(180〜0日)</h3>
-      <div id="mrDayEmpty" class="empty-note">月を選択するとブッキングカーブが表示されます。</div>
+      <div id="mrDayEmpty" class="empty-note">基準日を選択するとブッキングカーブが表示されます。</div>
       <div id="mrDayBody" style="display:none;">
         <div class="row" style="margin-bottom:10px; gap:18px;">
           <div>
@@ -251,26 +272,103 @@
             </div>
           </div>
           <div>
+            <label>表示期間</label>
+            <div class="row" style="gap:4px;">
+              <button class="ghost diff-toggle active" id="mrDayPeriod180" type="button">180日</button>
+              <button class="ghost diff-toggle" id="mrDayPeriod150" type="button">150日</button>
+              <button class="ghost diff-toggle" id="mrDayPeriod120" type="button">120日</button>
+              <button class="ghost diff-toggle" id="mrDayPeriod90" type="button">90日</button>
+              <button class="ghost diff-toggle" id="mrDayPeriod60" type="button">60日</button>
+              <button class="ghost diff-toggle" id="mrDayPeriod30" type="button">30日</button>
+            </div>
+          </div>
+          <div>
             <label>表示データ</label>
             <div class="row" style="gap:4px;">
               <button class="ghost diff-toggle active" id="mrDayMetricSales" type="button">売上</button>
               <button class="ghost diff-toggle" id="mrDayMetricRooms" type="button">販売客室数</button>
             </div>
           </div>
-          <div>
-            <label>表示日数</label>
-            <select id="mrDaysSelect" style="width:90px;">
-              <option value="30">30日</option>
-              <option value="60">60日</option>
-              <option value="90">90日</option>
-              <option value="180" selected>180日</option>
-            </select>
-          </div>
+          <label id="mrDayGrossLabel" style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+            <input type="checkbox" id="mrDayShowGrossToggle" style="width:auto;">
+            <span style="font-size:11.5px; color:var(--ink-soft);">今年度の総需要(キャンセル込み)も表示</span>
+          </label>
         </div>
         <div class="curve-sub" id="mrDayChartSub"></div>
         <div class="chart-block chart-block-primary"><canvas id="mrDayChart"></canvas></div>
       </div>
     </div>
+  </div>
+
+  <div class="card collapsible draggable-section" id="section-dailycurve" draggable="true">
+    <h2 class="collapsible-head" data-target="mrDailyCollapseBody"><span><span class="drag-handle">⠿</span> 日別ブッキングカーブ</span> <span class="chev">▾</span></h2>
+    <div class="collapsible-body" id="mrDailyCollapseBody">
+      <div class="cal-head" style="margin-bottom:10px;">
+        <div class="row" style="align-items:center; gap:8px;">
+          <button class="ghost" id="mrDailyPrevDay" type="button">‹</button>
+          <div class="month-title" id="mrDailyTitle">-</div>
+          <button class="ghost" id="mrDailyNextDay" type="button">›</button>
+        </div>
+        <div>
+          <label style="font-size:10.5px;">対象の宿泊日</label>
+          <input type="date" id="mrDailyRefDate" style="min-width:150px;">
+        </div>
+      </div>
+      <div id="mrDailyEmpty" class="empty-note">宿泊日を選択するとブッキングカーブが表示されます(カレンダーの日付をクリックしてもここに移動します)。</div>
+      <div id="mrDailyBody" style="display:none;">
+        <div class="row" style="margin-bottom:10px; gap:18px;">
+          <div>
+            <label>表示期間</label>
+            <div class="row" style="gap:4px;">
+              <button class="ghost diff-toggle active" id="mrDailyPeriod180" type="button">180日</button>
+              <button class="ghost diff-toggle" id="mrDailyPeriod150" type="button">150日</button>
+              <button class="ghost diff-toggle" id="mrDailyPeriod120" type="button">120日</button>
+              <button class="ghost diff-toggle" id="mrDailyPeriod90" type="button">90日</button>
+              <button class="ghost diff-toggle" id="mrDailyPeriod60" type="button">60日</button>
+              <button class="ghost diff-toggle" id="mrDailyPeriod30" type="button">30日</button>
+            </div>
+          </div>
+          <div>
+            <label>表示データ</label>
+            <div class="row" style="gap:4px;">
+              <button class="ghost diff-toggle active" id="mrDailyMetricSales" type="button">売上</button>
+              <button class="ghost diff-toggle" id="mrDailyMetricRooms" type="button">販売客室数</button>
+            </div>
+          </div>
+        </div>
+        <div class="curve-sub" id="mrDailyChartSub"></div>
+        <div class="chart-block chart-block-primary"><canvas id="mrDailyChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card collapsible draggable-section" id="section-channel" draggable="true">
+    <h2 class="collapsible-head" data-target="channelCollapseBody"><span><span class="drag-handle">⠿</span> チャンネル別分析</span> <span class="chev">▾</span></h2>
+    <div class="collapsible-body" id="channelCollapseBody">
+      <div id="channelAnalysisBlock"></div>
+    </div>
+  </div>
+
+  <div class="card collapsible draggable-section" id="section-inventory" draggable="true">
+    <h2 class="collapsible-head" data-target="invCollapseBody"><span><span class="drag-handle">⠿</span> 室数在庫予測</span> <span class="chev">▾</span></h2>
+    <div class="collapsible-body" id="invCollapseBody">
+      <div class="cal-head" style="margin-bottom:10px;">
+        <div class="row" style="align-items:center; gap:8px;">
+          <button class="ghost" id="mrInvPrevMonth" type="button">‹</button>
+          <div class="month-title" id="mrInvMonthTitle">-</div>
+          <button class="ghost" id="mrInvNextMonth" type="button">›</button>
+        </div>
+      </div>
+      <div class="curve-sub" id="mrInvChartSub" style="display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
+        <span><span style="display:inline-block;width:10px;height:10px;background:#9E9E9E;border-radius:2px;vertical-align:middle;"></span> 灰(一番太い)=前年最終実績</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#FB8C00;border-radius:2px;vertical-align:middle;"></span> 橙(中太さ)=前年同日水準</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#1E88E5;border-radius:2px;vertical-align:middle;"></span> 青(一番細い)=今年オンハンド(前年同日水準以上)</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#E53935;border-radius:2px;vertical-align:middle;"></span> 赤(一番細い)=今年オンハンド(前年同日水準未満)</span>
+        <span><span style="display:inline-block;width:14px;height:2px;background:#2E5C4A;vertical-align:middle;"></span> 折れ線(濃い緑)=在庫室数</span>
+      </div>
+      <div class="chart-block chart-block-primary"><canvas id="mrInvChart"></canvas></div>
+    </div>
+  </div>
   </div>
 
 </main>
@@ -793,7 +891,7 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
       state.curYear=y; state.curMonth=m;
     }
     renderCalendar();
-    populateMrMonthSelect(); renderMonthlyDayCurve();
+    populateMrMonthSelect(); renderMonthlyDayCurve(); renderInventoryChart(); renderChannelAnalysis(); renderDailyBookingCurve();
     renderMonthlyReport();
     setStatus(`取込完了: ${result.stayDates.length}日分、${result.points}件のスナップショットを画面に反映しました。サーバーに送信中…`, 'ok');
 
@@ -805,7 +903,7 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
       await saveSettings();
       await loadAll(); // refresh from server, picks up anything other users just added too
       renderCalendar();
-      populateMrMonthSelect(); renderMonthlyDayCurve();
+      populateMrMonthSelect(); renderMonthlyDayCurve(); renderInventoryChart(); renderChannelAnalysis(); renderDailyBookingCurve();
       renderMonthlyReport();
       setStatus(`取込完了: ${result.stayDates.length}日分、${result.points}件のスナップショットをサーバーに保存し、全員分の最新データを反映しました。`, 'ok');
     }catch(storageErr){
@@ -847,7 +945,7 @@ async function checkIncomingCSVs(){
     // so this same action also works as a general "get latest info" button
     await loadAll();
     renderCalendar();
-    populateMrMonthSelect(); renderMonthlyDayCurve();
+    populateMrMonthSelect(); renderMonthlyDayCurve(); renderInventoryChart(); renderChannelAnalysis(); renderDailyBookingCurve();
     renderMonthlyReport();
 
     const totalFiles = files.length;
@@ -871,7 +969,7 @@ document.getElementById('clearBtn').addEventListener('click', async ()=>{
     await apiDelete('/data-gross');
     await loadAll();
     renderCalendar();
-    populateMrMonthSelect(); renderMonthlyDayCurve();
+    populateMrMonthSelect(); renderMonthlyDayCurve(); renderInventoryChart(); renderChannelAnalysis(); renderDailyBookingCurve();
     renderMonthlyReport();
     setStatus('全データを削除しました。', 'ok');
   }catch(e){
@@ -886,7 +984,44 @@ document.querySelectorAll('.collapsible-head').forEach(head=>{
   });
 });
 // start collapsed
-document.querySelectorAll('.collapsible').forEach(c=>c.classList.add('collapsed'));
+document.querySelectorAll('.collapsible:not(.draggable-section)').forEach(c=>c.classList.add('collapsed'));
+
+// ---------- ドラッグ&ドロップで4セクションの表示順を入れ替え ----------
+(function setupSectionDragDrop(){
+  const container = document.getElementById('reorderableSections');
+  if(!container) return;
+  let draggedEl = null;
+
+  container.querySelectorAll('.draggable-section').forEach(section=>{
+    section.addEventListener('dragstart', (e)=>{
+      draggedEl = section;
+      section.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    section.addEventListener('dragend', ()=>{
+      section.classList.remove('dragging');
+      container.querySelectorAll('.draggable-section').forEach(s=>s.classList.remove('drag-over'));
+    });
+    section.addEventListener('dragover', (e)=>{
+      e.preventDefault();
+      if(section!==draggedEl) section.classList.add('drag-over');
+    });
+    section.addEventListener('dragleave', ()=>{
+      section.classList.remove('drag-over');
+    });
+    section.addEventListener('drop', (e)=>{
+      e.preventDefault();
+      section.classList.remove('drag-over');
+      if(!draggedEl || draggedEl===section) return;
+      const sections = [...container.querySelectorAll('.draggable-section')];
+      const draggedIdx = sections.indexOf(draggedEl);
+      const targetIdx = sections.indexOf(section);
+      if(draggedIdx < targetIdx) section.after(draggedEl);
+      else section.before(draggedEl);
+    });
+  });
+})();
+
 
 // ---------- tabs ----------
 // (tabs removed — calendar and booking curve are shown together on one page)
@@ -910,12 +1045,13 @@ function datesInMonth(y,m){
 
 // 宿泊日基準: for each offset (days before month-end), the cumulative total across all nights
 // in that month, using the state as observed on that calendar date.
-function stayBasisSeries(y, m, maxOffset){
+function stayBasisSeries(y, m, maxOffset, cutoffISO){
   const monthEnd = lastDayOfMonthISO(y,m);
   const nights = datesInMonth(y,m);
   const out = [];
   for(let off=maxOffset; off>=0; off--){
     const asOf = addDaysISO(monthEnd, -off);
+    if(cutoffISO && asOf > cutoffISO){ out.push({offset:off, date:asOf, rooms:null, sales:null}); continue; }
     let rooms=0, sales=0, any=false;
     nights.forEach(n=>{
       const v = valueAsOf(state.allData[n], asOf);
@@ -926,9 +1062,26 @@ function stayBasisSeries(y, m, maxOffset){
   return out;
 }
 
+function stayBasisSeriesGross(y, m, maxOffset, cutoffISO){
+  const monthEnd = lastDayOfMonthISO(y,m);
+  const nights = datesInMonth(y,m);
+  const out = [];
+  for(let off=maxOffset; off>=0; off--){
+    const asOf = addDaysISO(monthEnd, -off);
+    if(cutoffISO && asOf > cutoffISO){ out.push({offset:off, date:asOf, rooms:null, sales:null}); continue; }
+    let rooms=0, sales=0, any=false;
+    nights.forEach(n=>{
+      const v = valueAsOf(state.allDataGross && state.allDataGross[n], asOf);
+      if(v){ rooms+=v.rooms; sales+=v.sales; any=true; }
+    });
+    out.push({offset:off, date:asOf, rooms: any?rooms:null, sales: any?sales:null});
+  }
+  return out;
+}
+
 // 予約日基準: cumulative NEW business received during the display window, regardless of which
 // month those bookings are for (a booking-pace / production curve, not an on-the-books curve).
-function reservationBasisSeries(y, m, maxOffset){
+function reservationBasisSeries(y, m, maxOffset, cutoffISO){
   const monthEnd = lastDayOfMonthISO(y,m);
   const fromISO = addDaysISO(monthEnd, -maxOffset);
   const toISO = monthEnd;
@@ -948,9 +1101,10 @@ function reservationBasisSeries(y, m, maxOffset){
       prevRooms = cur.rooms; prevSales = cur.sales;
     });
   });
-  const out = []; let cumRooms=0, cumSales=0;
+  const out = []; let cumRooms=0, cumSales=0; let started=false;
   for(let off=maxOffset; off>=0; off--){
     const asOf = addDaysISO(monthEnd, -off);
+    if(cutoffISO && asOf > cutoffISO){ out.push({offset:off, date:asOf, rooms:null, sales:null}); continue; }
     if(deltaByDate.has(asOf)){
       const e = deltaByDate.get(asOf);
       cumRooms += e.rooms; cumSales += e.sales;
@@ -977,32 +1131,98 @@ function stepMonth(y, m, n){
   return { y: ny, m: nm };
 }
 
-// The three 6-month windows described by the user, computed directly from the SELECTED (year, month).
-// Each group is confined to a SINGLE calendar year — if the natural 6-month window would cross into
-// a different year, it is clipped (shortened) rather than allowed to spill over, so 前年度/前々年度
-// never show a year that could be confused with 今年度's year.
-//  ① this fiscal year's most recent months, ending at the selected month, clipped to selY
-//  ② last fiscal year's "complementary" months (the other part of the year), clipped to (selY-1)
-//  ③ the year before that, same complementary window, clipped to (selY-2)
-function computeSixMonthGroups(selY, selM){
-  const groupA = [];
-  for(let mm=selM; mm>=1 && groupA.length<6; mm--){ groupA.unshift({y:selY, m:mm}); }
-
-  const startM = stepMonth(selY, selM, 1).m; // month-only; year intentionally discarded
-  const groupB = [];
-  for(let mm=startM; mm<=12 && groupB.length<6; mm++){ groupB.push({y:selY-1, m:mm}); }
-
-  const groupC = [];
-  for(let mm=startM; mm<=12 && groupC.length<6; mm++){ groupC.push({y:selY-2, m:mm}); }
-
+// 選択した月を一番左にして、その月・翌月・翌々月の3ヶ月分を表示する(カレンダーの3ヶ月表示と同じ考え方)。
+// 今年度(A)・前年度(B)・前々年度(C)は、同じ「月の並び」を年だけ変えて重ねる。
+function computeThreeMonthGroups(selY, selM){
+  const groupA = [], groupB = [], groupC = [];
+  for(let i=0;i<3;i++){
+    const s = stepMonth(selY, selM, i);
+    groupA.push({y:s.y, m:s.m});
+    groupB.push({y:s.y-1, m:s.m});
+    groupC.push({y:s.y-2, m:s.m});
+  }
   return { groupA, groupB, groupC };
 }
 
-function monthTotalsLatest(y,m){
+// 元の「180〜0日」方式: 選択した月で終わる直近6ヶ月分を、今年度・前年度・前々年度それぞれ表示する。
+// 年またぎでも必ず6ヶ月ぶん揃う(以前は年末/年始付近の月を選ぶと、前年度/前々年度側が
+// 1〜2ヶ月分しか計算されない不具合があった)。
+function computeSixMonthGroups(selY, selM){
+  const groupA = [], groupB = [], groupC = [];
+  for(let i=5; i>=0; i--){
+    const s = stepMonth(selY, selM, -i);
+    groupA.push({y:s.y, m:s.m});
+    groupB.push({y:s.y-1, m:s.m});
+    groupC.push({y:s.y-2, m:s.m});
+  }
+  return { groupA, groupB, groupC };
+}
+
+// X軸ラベル: 3日区切り(1,4,7,10,...)+月末は必ず表示。各月1日は「M月1日」と月が分かる形にする。
+// X軸ラベル: 4日区切り+月末は必ず表示。各月1日は「M/1」と短く月が分かる形にする(横書きで詰めても重ならないように)。
+function dayLabelFor(dateISO_, y, m){
+  const day = Number(dateISO_.slice(8,10));
+  const lastDay = new Date(y, m, 0).getDate();
+  if(day===1) return `${m}/1`;
+  if(day===lastDay || (day-1)%4===0) return `${day}`;
+  return '';
+}
+
+// オフセットのラベル間引き(180〜0日カウントダウン用): 直近7日は毎日、8〜14日前は7日おき、それより前は14日おき。
+function offsetLabelFor(offset){
+  if(offset<=7) return `${offset}`;
+  if(offset<=14) return offset%7===0 ? `${offset}` : '';
+  return offset%14===0 ? `${offset}` : '';
+}
+
+// 室数在庫予測用のヘルパー
+function addYearsISO(iso, years){
+  const [y,m,d] = iso.split('-').map(Number);
+  const daysInTarget = new Date(y+years, m, 0).getDate();
+  const dd = Math.min(d, daysInTarget);
+  return `${y+years}-${String(m).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+}
+// 前年の「着地(最終)」値: キャンセル等も反映された、その日の最新(=確定)の状態。
+function landedPriorValue(dateISO_, key){
+  const priorISO = addYearsISO(dateISO_, -1);
+  const rec = state.allData[priorISO];
+  if(!rec) return null;
+  const keys = Object.keys(rec).sort();
+  if(!keys.length) return null;
+  return rec[keys[keys.length-1]][key];
+}
+function landedPrior2Value(dateISO_, key){
+  const prior2ISO = addYearsISO(dateISO_, -2);
+  const rec = state.allData[prior2ISO];
+  if(!rec) return null;
+  const keys = Object.keys(rec).sort();
+  if(!keys.length) return null;
+  return rec[keys[keys.length-1]][key];
+}
+// 前年の「今と同じ何日前時点」の値: 今年の基準日から見た日数差と同じだけ、前年のその日から遡った時点の状態。
+function pacingPriorValue(dateISO_, key, cutoffISO){
+  const d = isoToUTCDate(dateISO_);
+  const cutoff = isoToUTCDate(cutoffISO);
+  const daysBefore = Math.round((d - cutoff) / 86400000);
+  const priorISO = addYearsISO(dateISO_, -1);
+  const priorDate = isoToUTCDate(priorISO);
+  const snapshotDate = new Date(priorDate.getTime() - daysBefore*86400000);
+  const snapshotISO = utcDateToISO(snapshotDate);
+  const rec = state.allData[priorISO];
+  const v = valueAsOf(rec, snapshotISO);
+  return v ? v[key] : null;
+}
+
+function monthTotalsLatest(y,m,cutoffISO){
   let rooms=0, sales=0;
   datesInMonth(y,m).forEach(n=>{
     const rec = state.allData[n];
     if(!rec) return;
+    if(cutoffISO){
+      const v = valueAsOf(rec, cutoffISO);
+      if(v){ rooms += v.rooms; sales += v.sales; }
+      return;
+    }
     const keys = Object.keys(rec).sort();
     if(!keys.length) return;
     const v = rec[keys[keys.length-1]];
@@ -1014,6 +1234,17 @@ function monthTotalsLatest(y,m){
 state.mr3Metric = 'sales'; // 'sales' | 'rooms' — for the 3-period 6-month comparison chart
 state.mr3ShowGross = false;
 let mrChart = null;
+
+// Reads the shared 基準日(年・月・日) picker. Returns null if nothing selected yet.
+function getRefDate(){
+  return readDateInput('mrRefDate');
+}
+function readDateInput(elId){
+  const v = document.getElementById(elId).value; // "YYYY-MM-DD" or ""
+  if(!v) return null;
+  const [y,m,d] = v.split('-').map(Number);
+  return { y, m, d, iso: v };
+}
 
 function mrSet3Metric(m){
   state.mr3Metric = m;
@@ -1028,19 +1259,102 @@ document.getElementById('mr3ShowGrossToggle').addEventListener('change', (e)=>{
   renderMonthlyReport();
 });
 
+// 着地予測(3年分のデータを使う版): 「今年度が前年度に対してどれくらいのペースか」と
+// 「前々年度→前年度で実際どれくらい伸びた/縮んだか」という2つの実績を組み合わせて予測する。
+// 単純に前年度の形をなぞるだけより、複数年のトレンドを反映した、プレゼンで説明しやすい根拠になる。
+function computeBlendedForecast(curArr, priorArr, prior2Arr, pivotIdx){
+  if(pivotIdx < 0) return curArr.map(()=>null);
+
+  // ① 今年度の実績 ÷ 前年度の同期間実績 = 直近の実勢ペース
+  let sumCur=0, sumPriorForPace=0;
+  for(let i=0;i<=pivotIdx;i++){
+    if(curArr[i]!=null && priorArr[i]!=null){ sumCur+=curArr[i]; sumPriorForPace+=priorArr[i]; }
+  }
+  const paceRatio = sumPriorForPace>0 ? sumCur/sumPriorForPace : null;
+
+  // ② 前年度実績 ÷ 前々年度実績(全期間) = ここ数年の伸び率トレンド
+  let sumPriorFull=0, sumPrior2=0;
+  for(let i=0;i<curArr.length;i++){
+    if(priorArr[i]!=null && prior2Arr[i]!=null){ sumPriorFull+=priorArr[i]; sumPrior2+=prior2Arr[i]; }
+  }
+  const trendRatio = sumPrior2>0 ? sumPriorFull/sumPrior2 : null;
+
+  // 両方あれば7:3で加重平均(直近の実勢を重視しつつ、複数年トレンドも反映)。片方しか無ければそれだけ使う。
+  let ratio;
+  if(paceRatio!=null && trendRatio!=null) ratio = paceRatio*0.7 + trendRatio*0.3;
+  else if(paceRatio!=null) ratio = paceRatio;
+  else if(trendRatio!=null) ratio = trendRatio;
+  else ratio = 1;
+
+  const lastKnownVal = curArr[pivotIdx] || 0;
+  const out = curArr.map((v,i)=>{
+    if(i<pivotIdx) return null;
+    if(i===pivotIdx) return lastKnownVal; // connects the forecast line to where the actual line ends
+    if(priorArr[i]!=null) return priorArr[i]*ratio;
+    return null;
+  });
+  return out;
+}
+
+function dayListFor(group){
+  const days = [];
+  group.forEach(({y,m})=>{ datesInMonth(y,m).forEach(iso=>days.push(iso)); });
+  return days;
+}
+function dayActual(dateISO, key, cutoff){
+  if(cutoff && dateISO > cutoff) return null;
+  const rec = state.allData[dateISO];
+  if(!rec) return null;
+  const keys = Object.keys(rec).sort();
+  if(!keys.length) return null;
+  return rec[keys[keys.length-1]][key];
+}
+function dayActualGross(dateISO, key, cutoff){
+  if(cutoff && dateISO > cutoff) return null;
+  const rec = state.allDataGross && state.allDataGross[dateISO];
+  if(!rec) return null;
+  const keys = Object.keys(rec).sort();
+  if(!keys.length) return null;
+  return rec[keys[keys.length-1]][key];
+}
+// 予約日基準(①用): 指定した日付リスト(3ヶ月分)の範囲内で「新規に発生した予約」を日ごとに積み上げる。
+function reservationBasisDaySeries(days, cutoff){
+  if(!days.length) return [];
+  const fromISO = days[0], toISO = days[days.length-1];
+  const deltaByDate = new Map();
+  Object.keys(state.allData).forEach(night=>{
+    const rec = state.allData[night];
+    const keys = Object.keys(rec).sort();
+    let prevRooms=0, prevSales=0;
+    keys.forEach(k=>{
+      const cur = rec[k];
+      const dRooms = cur.rooms - prevRooms, dSales = cur.sales - prevSales;
+      if(k>=fromISO && k<=toISO){
+        const e = deltaByDate.get(k) || {rooms:0, sales:0};
+        e.rooms += dRooms; e.sales += dSales;
+        deltaByDate.set(k, e);
+      }
+      prevRooms = cur.rooms; prevSales = cur.sales;
+    });
+  });
+  let cumRooms=0, cumSales=0;
+  return days.map(d=>{
+    if(cutoff && d > cutoff) return { date:d, rooms:null, sales:null };
+    if(deltaByDate.has(d)){ const e=deltaByDate.get(d); cumRooms+=e.rooms; cumSales+=e.sales; }
+    return { date:d, rooms:cumRooms, sales:cumSales };
+  });
+}
+
 function renderMonthlyReport(){
-  const sel = document.getElementById('mrMonthSelect');
-  const ym = sel.value;
+  const ref = getRefDate();
   const emptyEl = document.getElementById('mrEmpty');
-  const bodyEl = document.getElementById('mrBody');
-  if(!ym){ emptyEl.style.display='block'; bodyEl.style.display='none'; return; }
+  const bodyEl = document.getElementById('mrBodyInner');
+  if(!ref){ emptyEl.style.display='block'; bodyEl.style.display='none'; return; }
   emptyEl.style.display='none'; bodyEl.style.display='block';
 
-  const [selY, selM] = ym.split('-').map(Number);
+  const selY = ref.y, selM = ref.m;
   const cap = state.settings.capacity || 68;
   const { groupA, groupB, groupC } = computeSixMonthGroups(selY, selM);
-
-  // ---- KPIs: the selected month vs the same month last year ----
   const kpiMonth = groupA[groupA.length-1]; // = the selected month itself
   const kpiPrior = stepMonth(kpiMonth.y, kpiMonth.m, -12);
   const nightsThis = datesInMonth(kpiMonth.y, kpiMonth.m);
@@ -1071,45 +1385,27 @@ function renderMonthlyReport(){
   const metricKey = state.mr3Metric;
   const unit = metricKey==='sales' ? '円' : '室';
 
-  function dayListFor(group){
-    const days = [];
-    group.forEach(({y,m})=>{ datesInMonth(y,m).forEach(iso=>days.push(iso)); });
-    return days;
+  function seriesFor(group, cutoff){
+    return dayListFor(group).map(iso=>({ date: iso, value: dayActual(iso, metricKey, cutoff) }));
   }
-  function dayActual(dateISO, key){
-    const rec = state.allData[dateISO];
-    if(!rec) return null;
-    const keys = Object.keys(rec).sort();
-    if(!keys.length) return null;
-    return rec[keys[keys.length-1]][key];
+  function seriesForGross(group, cutoff){
+    return dayListFor(group).map(iso=>({ date: iso, value: dayActualGross(iso, metricKey, cutoff) }));
   }
-  function dayActualGross(dateISO, key){
-    const rec = state.allDataGross && state.allDataGross[dateISO];
-    if(!rec) return null;
-    const keys = Object.keys(rec).sort();
-    if(!keys.length) return null;
-    return rec[keys[keys.length-1]][key];
-  }
-  function seriesFor(group){
-    return dayListFor(group).map(iso=>({ date: iso, value: dayActual(iso, metricKey) }));
-  }
-  function seriesForGross(group){
-    return dayListFor(group).map(iso=>({ date: iso, value: dayActualGross(iso, metricKey) }));
-  }
+  // 今年度(A)も含め、実データがあればそのまま表示する(未来の月でも予約済みの分は見せる)。
+  // データが無い日は自然にforecastが埋める。
   const dataA = seriesFor(groupA);
   const dataB = seriesFor(groupB);
   const dataC = seriesFor(groupC);
   const dataAGross = state.mr3ShowGross ? seriesForGross(groupA) : null;
   const maxLen = Math.max(dataA.length, dataB.length, dataC.length);
+  // ラベルは「180〜0日前」のカウントダウン形式(数字のみ)。14〜7〜0で段階的に間引く。
   const labels = Array.from({length:maxLen}, (_,i)=>{
-    const ref = dataA[i] || dataB[i] || dataC[i];
-    if(!ref) return '';
-    const [yy,mm,dd] = ref.date.split('-');
-    return `${Number(mm)}/${Number(dd)}`;
+    const offset = maxLen - 1 - i; // 最後の日=0(現在)、先頭=最大日数前(過去)
+    return offsetLabelFor(offset);
   });
 
   document.getElementById('mrChartSub').textContent =
-    `選択月(${selY}年${selM}月)を起点に自動算出。緑=今年度(${groupA[0].y}年${groupA[0].m}月〜${groupA[groupA.length-1].y}年${groupA[groupA.length-1].m}月)　灰=前年度(${groupB[0].y}年${groupB[0].m}月〜${groupB[groupB.length-1].y}年${groupB[groupB.length-1].m}月)　青=前々年度(${groupC[0].y}年${groupC[0].m}月〜${groupC[groupC.length-1].y}年${groupC[groupC.length-1].m}月) — 日単位で表示。同じ位置の日同士を比較し、この先6ヶ月の室料設定の参考にできます。`;
+    `選択月(${selY}年${selM}月)を起点に自動算出。緑=今年度(${groupA[0].y}年${groupA[0].m}月〜${groupA[groupA.length-1].y}年${groupA[groupA.length-1].m}月)　オレンジ=前年度(${groupB[0].y}年${groupB[0].m}月〜${groupB[groupB.length-1].y}年${groupB[groupB.length-1].m}月)　青=前々年度(${groupC[0].y}年${groupC[0].m}月〜${groupC[groupC.length-1].y}年${groupC[groupC.length-1].m}月) — 日単位で表示。同じ位置の日同士を比較し、この先6ヶ月の室料設定の参考にできます。`;
 
   if(mrChart) mrChart.destroy();
   const ctx = document.getElementById('mrChart').getContext('2d');
@@ -1122,31 +1418,24 @@ function renderMonthlyReport(){
   const dataBArr = toChartData(dataB);
   const dataCArr = toChartData(dataC);
   const dataAGrossArr = dataAGross ? toChartData(dataAGross) : null;
-  // pacing forecast: extend 今年度(A) forward using 前年度(B)'s shape, for any position A has no data yet
-  const lastKnownIdx = (()=>{ let idx=-1; dataAArr.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
-  const lastKnownVal = lastKnownIdx>=0 ? dataAArr[lastKnownIdx] : 0;
-  const bAtLastKnown = lastKnownIdx>=0 ? dataBArr[lastKnownIdx] : null;
-  const forecastArr = dataAArr.map((v,i)=>{
-    if(v!=null) return null;
-    if(bAtLastKnown && dataBArr[i]!=null && bAtLastKnown>0){
-      return lastKnownVal * (dataBArr[i]/bAtLastKnown);
-    }
-    return null;
-  });
-  if(lastKnownIdx>=0 && forecastArr.length>lastKnownIdx) forecastArr[lastKnownIdx] = lastKnownVal;
+  // 着地予測は3年分のデータ(今年度の実勢ペース × 前年度/前々年度の伸び率トレンド)を使って計算する。
+  // 基準日そのものを予測の開始点として固定する(スキャン方式だと未来の断片的な実データでずれるため)。
+  const pivotIdx = dataA.findIndex(p=>p.date===ref.iso);
+  const lastKnownIdx = pivotIdx>=0 ? pivotIdx : (()=>{ let idx=-1; dataAArr.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
+  const forecastArr = computeBlendedForecast(dataAArr, dataBArr, dataCArr, lastKnownIdx);
 
   const labelC = groupC[0] ? `${groupC[0].y}年` : '前々年度';
   const labelB = groupB[0] ? `${groupB[0].y}年` : '前年度';
   const labelA = groupA[0] ? `${groupA[0].y}年` : '今年度';
 
   const datasets = [
-    { label:labelC, data:dataCArr, borderColor:'#3E5C74', backgroundColor:'transparent', pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true },
-    { label:labelB, data:dataBArr, borderColor:'#9096A3', backgroundColor:'transparent', pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true },
-    { label:labelA, data:dataAArr, borderColor:'#4A7A6B', backgroundColor:'#4A7A6B15', pointRadius:0, borderWidth:2, tension:0.1, spanGaps:true, fill:true },
-    { label:'着地予測', data:forecastArr, borderColor:'#B08D57', backgroundColor:'transparent', borderDash:[5,4], pointRadius:0, tension:0.1, spanGaps:true }
+    { label:labelC, data:dataCArr, borderColor:'#1E88E5', backgroundColor:'transparent', pointRadius:0, borderWidth:0.5, tension:0.1, spanGaps:true },
+    { label:labelB, data:dataBArr, borderColor:'#FB8C00', backgroundColor:'transparent', pointRadius:0, borderWidth:0.5, tension:0.1, spanGaps:true },
+    { label:labelA, data:dataAArr, borderColor:'#2E7D32', backgroundColor:'#2E7D3215', pointRadius:0, borderWidth:0.9, tension:0.1, spanGaps:true, fill:true },
+    { label:'着地予測', data:forecastArr, borderColor:'#E53935', backgroundColor:'transparent', borderDash:[5,4], borderWidth:0.9, pointRadius:0, tension:0.1, spanGaps:true }
   ];
   if(dataAGrossArr){
-    datasets.push({ label:`${labelA} 総需要(キャンセル込み)`, data:dataAGrossArr, borderColor:'#8A4A52', backgroundColor:'transparent', borderDash:[2,2], pointRadius:0, borderWidth:1.5, tension:0.1, spanGaps:true });
+    datasets.push({ label:`${labelA} 総需要(キャンセル込み)`, data:dataAGrossArr, borderColor:'#8E24AA', backgroundColor:'transparent', borderDash:[2,2], pointRadius:0, borderWidth:0.7, tension:0.1, spanGaps:true });
   }
 
   mrChart = new Chart(ctx, {
@@ -1162,6 +1451,13 @@ function renderMonthlyReport(){
         tooltip:{
           mode:'index', intersect:false,
           callbacks:{
+            title:(items)=>{
+              if(!items.length) return '';
+              const p = dataA[items[0].dataIndex] || dataB[items[0].dataIndex] || dataC[items[0].dataIndex];
+              if(!p) return '';
+              const [yy,mm,dd] = p.date.split('-');
+              return `${yy}年${Number(mm)}月${Number(dd)}日`;
+            },
             label:(c)=>{
               if(c.datasetIndex===3){
                 return c.formattedValue==null ? `${c.dataset.label}: -` : `${c.dataset.label}: ${unit==='円'?'¥':''}${Number(c.raw).toLocaleString()}${unit==='室'?'室':''}`;
@@ -1184,7 +1480,7 @@ function renderMonthlyReport(){
         }
       },
       scales:{
-        x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true, maxTicksLimit:24, font:{size:9.5}} },
+        x:{ grid:{display:false}, ticks:{maxRotation:0, minRotation:0, autoSkip:false, font:{size:6}} },
         y:{ beginAtZero:true, grid:{color:'#E9EBEF'} }
       }
     }
@@ -1193,13 +1489,15 @@ function renderMonthlyReport(){
 
 // ---------- 月別ブッキングカーブ(180〜0日): month-picker driven, restored alongside the 3-period chart ----------
 function populateMrMonthSelect(){
-  const sel = document.getElementById('mrMonthSelect');
-  const prev = sel.value;
-  const months = [...new Set(Object.keys(state.allData).map(iso=>iso.slice(0,7)))].sort();
-  sel.innerHTML = '<option value="">-- 月を選択 --</option>' +
-    months.map(ym=>{ const [y,m]=ym.split('-').map(Number); return `<option value="${ym}">${y}年${m}月</option>`; }).join('');
-  if(months.includes(prev)) sel.value = prev;
-  else if(months.length) sel.value = months[months.length-1];
+  const now = new Date();
+  const todayISOStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const input = document.getElementById('mrRefDate');
+  if(!input.value) input.value = todayISOStr;
+  const dayInput = document.getElementById('mrDayRefDate');
+  if(!dayInput.value) dayInput.value = todayISOStr;
+  const dailyInput = document.getElementById('mrDailyRefDate');
+  if(!dailyInput.value) dailyInput.value = todayISOStr;
+  if(state.mrInvYear==null){ state.mrInvYear = now.getFullYear(); state.mrInvMonth = now.getMonth()+1; }
 }
 
 state.mrBasis = 'stay';       // 'stay' | 'reservation'
@@ -1222,77 +1520,502 @@ document.getElementById('mrBasisStay').addEventListener('click', ()=>mrSetBasis(
 document.getElementById('mrBasisReservation').addEventListener('click', ()=>mrSetBasis('reservation'));
 document.getElementById('mrDayMetricSales').addEventListener('click', ()=>mrSetDayMetric('sales'));
 document.getElementById('mrDayMetricRooms').addEventListener('click', ()=>mrSetDayMetric('rooms'));
-document.getElementById('mrDaysSelect').addEventListener('change', renderMonthlyDayCurve);
-document.getElementById('mrMonthSelect').addEventListener('change', ()=>{ renderMonthlyReport(); renderMonthlyDayCurve(); });
+state.mrDayPeriod = 180; // 180 | 150 | 120 | 90 | 60 | 30
+function mrSetDayPeriod(p){
+  state.mrDayPeriod = p;
+  [180,150,120,90,60,30].forEach(v=>{
+    document.getElementById('mrDayPeriod'+v).classList.toggle('active', v===p);
+  });
+  renderMonthlyDayCurve();
+}
+[180,150,120,90,60,30].forEach(v=>{
+  document.getElementById('mrDayPeriod'+v).addEventListener('click', ()=>mrSetDayPeriod(v));
+});
+document.getElementById('mrRefDate').addEventListener('change', renderMonthlyReport);
+function mrShiftMonth(elId, delta, onChange){
+  const ref = readDateInput(elId);
+  if(!ref) return;
+  const stepped = stepMonth(ref.y, ref.m, delta);
+  const daysInTarget = new Date(stepped.y, stepped.m, 0).getDate();
+  const d = Math.min(ref.d, daysInTarget); // clamp e.g. Jan31 -> Feb28
+  document.getElementById(elId).value = `${stepped.y}-${String(stepped.m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  onChange();
+}
+document.getElementById('mrPrevMonth').addEventListener('click', ()=>mrShiftMonth('mrRefDate', -1, renderMonthlyReport));
+document.getElementById('mrNextMonth').addEventListener('click', ()=>mrShiftMonth('mrRefDate', 1, renderMonthlyReport));
+document.getElementById('mrDayRefDate').addEventListener('change', renderMonthlyDayCurve);
+document.getElementById('mrDayPrevMonth').addEventListener('click', ()=>mrShiftMonth('mrDayRefDate', -1, renderMonthlyDayCurve));
+document.getElementById('mrDayNextMonth').addEventListener('click', ()=>mrShiftMonth('mrDayRefDate', 1, renderMonthlyDayCurve));
+state.mrDayShowGross = false;
+document.getElementById('mrDayShowGrossToggle').addEventListener('change', (e)=>{
+  state.mrDayShowGross = e.target.checked;
+  renderMonthlyDayCurve();
+});
+document.getElementById('mrInvPrevMonth').addEventListener('click', ()=>{
+  const s = stepMonth(state.mrInvYear, state.mrInvMonth, -1);
+  state.mrInvYear = s.y; state.mrInvMonth = s.m;
+  renderInventoryChart();
+});
+document.getElementById('mrInvNextMonth').addEventListener('click', ()=>{
+  const s = stepMonth(state.mrInvYear, state.mrInvMonth, 1);
+  state.mrInvYear = s.y; state.mrInvMonth = s.m;
+  renderInventoryChart();
+});
 
 function renderMonthlyDayCurve(){
-  const sel = document.getElementById('mrMonthSelect');
-  const ym = sel.value;
+  const ref = readDateInput('mrDayRefDate');
   const emptyEl = document.getElementById('mrDayEmpty');
   const bodyEl = document.getElementById('mrDayBody');
-  if(!ym){ emptyEl.style.display='block'; bodyEl.style.display='none'; return; }
+  if(!ref){ emptyEl.style.display='block'; bodyEl.style.display='none'; return; }
   emptyEl.style.display='none'; bodyEl.style.display='block';
 
-  const [y,m] = ym.split('-').map(Number);
+  const y = ref.y, m = ref.m;
+  const cutoffISO = ref.iso;
   const priorY = y-1;
   const prior2Y = y-2;
-  const maxOffset = Number(document.getElementById('mrDaysSelect').value);
-
-  const buildFn = state.mrBasis==='stay' ? stayBasisSeries : reservationBasisSeries;
-  const curSeries = buildFn(y, m, maxOffset);
-  const priorSeries = buildFn(priorY, m, maxOffset);
-  const prior2Series = buildFn(prior2Y, m, maxOffset);
+  let maxOffset;
+  if(state.mrDayPeriod===180){
+    // 「180日」固定だと月によって6ヶ月に届かないことがあるため、選択月を含む直近6ヶ月分(暦月ベース)を
+    // 正確にカバーできる日数を計算する(選択月の5ヶ月前の1日 〜 選択月の月末、まで)。
+    const sixMonthsAgoStart = stepMonth(y, m, -5);
+    const sixMonthStartISO = dateISO(sixMonthsAgoStart.y, sixMonthsAgoStart.m, 1);
+    const monthEndForOffset = lastDayOfMonthISO(y, m);
+    maxOffset = Math.round((isoToUTCDate(monthEndForOffset) - isoToUTCDate(sixMonthStartISO)) / 86400000);
+  } else {
+    maxOffset = state.mrDayPeriod;
+  }
   const metricKey = state.mrDayMetric;
   const unit = metricKey==='sales' ? '円' : '室';
 
-  const labels = curSeries.map(p=>{ const [yy,mm,dd]=p.date.split('-'); return `${Number(mm)}/${Number(dd)}`; });
-  const curData = curSeries.map(p=>p[metricKey]);
-  const priorData = priorSeries.map(p=>p[metricKey]);
-  const prior2Data = prior2Series.map(p=>p[metricKey]);
-  // simple pacing forecast line: extends the current series forward using the prior-year shape for
-  // any offsets where this year has no data yet (i.e., still in the future)
-  const lastKnownIdx = (()=>{ let idx=-1; curData.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
-  const lastKnownVal = lastKnownIdx>=0 ? curData[lastKnownIdx] : 0;
-  const priorAtLastKnown = lastKnownIdx>=0 ? priorData[lastKnownIdx] : null;
-  const forecastData = curData.map((v,i)=>{
-    if(v!=null) return null;
-    if(priorAtLastKnown && priorData[i]!=null && priorAtLastKnown>0){
-      return lastKnownVal * (priorData[i]/priorAtLastKnown);
-    }
-    return null;
-  });
-  if(lastKnownIdx>=0 && forecastData.length>lastKnownIdx) forecastData[lastKnownIdx] = lastKnownVal;
+  // gross(総需要)は宿泊日基準の時だけ意味があるので、予約日基準の時はトグルを隠す
+  const grossLabel = document.getElementById('mrDayGrossLabel');
+  grossLabel.style.display = state.mrBasis==='stay' ? 'flex' : 'none';
+  const showGross = state.mrBasis==='stay' && state.mrDayShowGross;
+
+  const buildFn = state.mrBasis==='stay' ? stayBasisSeries : reservationBasisSeries;
+  const curSeriesRaw = buildFn(y, m, maxOffset, cutoffISO);
+  const priorSeriesRaw = buildFn(priorY, m, maxOffset);
+  const prior2SeriesRaw = buildFn(prior2Y, m, maxOffset);
+  const grossSeriesRaw = showGross ? stayBasisSeriesGross(y, m, maxOffset, cutoffISO) : null;
+  const daysA = curSeriesRaw.map(p=>p.date); // 一番左=maxOffset日前(過去)、一番右=月末(現在に一番近い側)
+
+  document.getElementById('mrDayHeader').textContent = `月別ブッキングカーブ(${maxOffset}〜0日)`;
+
+  // タイトルに実際の開始日〜終了日を表示(月名だけでなく、maxOffset日前〜月末の具体的な日付)
+  const rangeStart = daysA[0], rangeEnd = daysA[daysA.length-1];
+  if(rangeStart && rangeEnd){
+    const [sy,sm,sd] = rangeStart.split('-'); const [ey,em,ed] = rangeEnd.split('-');
+    document.getElementById('mrDayMonthTitle').textContent =
+      `${sy}年${Number(sm)}月${Number(sd)}日 〜 ${ey}年${Number(em)}月${Number(ed)}日`;
+  } else {
+    document.getElementById('mrDayMonthTitle').textContent = `${y}年${m}月`;
+  }
+
+  const labels = curSeriesRaw.map(p=>offsetLabelFor(p.offset));
+  const curData = curSeriesRaw.map(p=>p[metricKey]);
+  const priorData = priorSeriesRaw.map(p=>p[metricKey]);
+  const prior2Data = prior2SeriesRaw.map(p=>p[metricKey]);
+  const grossData = grossSeriesRaw ? grossSeriesRaw.map(p=>p[metricKey]) : null;
+
+  // 着地予測は3年分のデータ(今年度の実勢ペース × 前年度/前々年度の伸び率トレンド)を使って計算する。
+  // 基準日そのものを予測の開始点として固定する(スキャン方式だと未来の断片的な実データでずれるため)。
+  const pivotIdx = daysA.findIndex(d=>d===cutoffISO);
+  const lastKnownIdx = pivotIdx>=0 ? pivotIdx : (()=>{ let idx=-1; curData.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
+  const forecastData = computeBlendedForecast(curData, priorData, prior2Data, lastKnownIdx);
 
   document.getElementById('mrDayChartSub').textContent =
-    `${state.mrBasis==='stay' ? '宿泊日基準' : '予約日基準'} / ${metricKey==='sales'?'売上':'販売客室数'} — 青:${prior2Y}年${m}月　灰:${priorY}年${m}月　緑:${y}年${m}月　黄:着地予測`;
+    `${state.mrBasis==='stay' ? '宿泊日基準' : '予約日基準'} / ${metricKey==='sales'?'売上':'販売客室数'} — 基準日:${cutoffISO}(実データはここまで、以降は着地予測) — 180〜0日 青:${prior2Y}年${m}月　オレンジ:${priorY}年${m}月　緑:${y}年${m}月　赤:着地予測${showGross?'　紫:総需要(キャンセル込み)':''}`;
 
   if(mrDayChart) mrDayChart.destroy();
   const ctx = document.getElementById('mrDayChart').getContext('2d');
+  const datasets = [
+    { label:`${prior2Y}年${m}月`, data:prior2Data, borderColor:'#1E88E5', backgroundColor:'transparent', borderWidth:0.7, pointRadius:0, tension:0.1, spanGaps:true },
+    { label:`${priorY}年${m}月`, data:priorData, borderColor:'#FB8C00', backgroundColor:'transparent', borderWidth:0.7, pointRadius:0, tension:0.1, spanGaps:true },
+    { label:`${y}年${m}月`, data:curData, borderColor:'#2E7D32', backgroundColor:'#2E7D3215', borderWidth:0.9, pointRadius:0, tension:0.1, spanGaps:true, fill:true },
+    { label:'着地予測', data:forecastData, borderColor:'#E53935', backgroundColor:'transparent', borderDash:[5,4], borderWidth:0.9, pointRadius:0, tension:0.1, spanGaps:true }
+  ];
+  if(grossData){
+    datasets.push({ label:`${y}年${m}月 総需要(キャンセル込み)`, data:grossData, borderColor:'#8E24AA', backgroundColor:'transparent', borderDash:[2,2], pointRadius:0, borderWidth:0.7, tension:0.1, spanGaps:true });
+  }
   mrDayChart = new Chart(ctx, {
     type:'line',
-    data:{
-      labels,
-      datasets:[
-        { label:`${prior2Y}年${m}月`, data:prior2Data, borderColor:'#3E5C74', backgroundColor:'transparent', pointRadius:0, tension:0.1, spanGaps:true },
-        { label:`${priorY}年${m}月`, data:priorData, borderColor:'#9096A3', backgroundColor:'transparent', pointRadius:0, tension:0.1, spanGaps:true },
-        { label:`${y}年${m}月`, data:curData, borderColor:'#4A7A6B', backgroundColor:'#4A7A6B15', pointRadius:0, tension:0.1, spanGaps:true, fill:true },
-        { label:'着地予測', data:forecastData, borderColor:'#B08D57', backgroundColor:'transparent', borderDash:[5,4], pointRadius:0, tension:0.1, spanGaps:true }
-      ]
-    },
+    data:{ labels, datasets },
     options:{
       responsive:true, maintainAspectRatio:true, aspectRatio:2.2,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
         tooltip:{
           mode:'index', intersect:false,
-          callbacks:{ label:(c)=> c.formattedValue==null ? `${c.dataset.label}: -` : `${c.dataset.label}: ${unit==='円'?'¥':''}${Number(c.raw).toLocaleString()}${unit==='室'?'室':''}` }
+          callbacks:{
+            title:(items)=>{
+              if(!items.length) return '';
+              const d = daysA[items[0].dataIndex];
+              if(!d) return '';
+              const [yy,mm,dd] = d.split('-');
+              return `${Number(mm)}月${Number(dd)}日`;
+            },
+            label:(c)=> c.formattedValue==null ? `${c.dataset.label}: -` : `${c.dataset.label}: ${unit==='円'?'¥':''}${Number(c.raw).toLocaleString()}${unit==='室'?'室':''}`
+          }
         }
       },
       scales:{
-        x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true, maxTicksLimit:16, font:{size:10}} },
+        x:{ grid:{display:false}, ticks:{maxRotation:0, minRotation:0, autoSkip:false, font:{size:6}} },
         y:{ beginAtZero:true, grid:{color:'#E9EBEF'} }
       }
     }
+  });
+}
+
+// ---------- 日別ブッキングカーブ(特定の宿泊日1日ぶんの積み上がりを見る、180〜0日) ----------
+function singleDateBookingSeries(stayISO, maxOffset){
+  const out = [];
+  for(let off=maxOffset; off>=0; off--){
+    const asOf = addDaysISO(stayISO, -off);
+    const v = valueAsOf(state.allData[stayISO], asOf);
+    out.push({offset:off, date:asOf, rooms: v?v.rooms:null, sales: v?v.sales:null});
+  }
+  return out;
+}
+
+state.mrDailyMetric = 'sales';
+state.mrDailyPeriod = 180;
+let mrDailyChart = null;
+
+function mrSetDailyMetric(m){
+  state.mrDailyMetric = m;
+  document.getElementById('mrDailyMetricSales').classList.toggle('active', m==='sales');
+  document.getElementById('mrDailyMetricRooms').classList.toggle('active', m==='rooms');
+  renderDailyBookingCurve();
+}
+document.getElementById('mrDailyMetricSales').addEventListener('click', ()=>mrSetDailyMetric('sales'));
+document.getElementById('mrDailyMetricRooms').addEventListener('click', ()=>mrSetDailyMetric('rooms'));
+function mrSetDailyPeriod(p){
+  state.mrDailyPeriod = p;
+  [180,150,120,90,60,30].forEach(v=>{
+    document.getElementById('mrDailyPeriod'+v).classList.toggle('active', v===p);
+  });
+  renderDailyBookingCurve();
+}
+[180,150,120,90,60,30].forEach(v=>{
+  document.getElementById('mrDailyPeriod'+v).addEventListener('click', ()=>mrSetDailyPeriod(v));
+});
+document.getElementById('mrDailyRefDate').addEventListener('change', renderDailyBookingCurve);
+document.getElementById('mrDailyPrevDay').addEventListener('click', ()=>{
+  const ref = readDateInput('mrDailyRefDate');
+  if(!ref) return;
+  document.getElementById('mrDailyRefDate').value = addDaysISO(ref.iso, -1);
+  renderDailyBookingCurve();
+});
+document.getElementById('mrDailyNextDay').addEventListener('click', ()=>{
+  const ref = readDateInput('mrDailyRefDate');
+  if(!ref) return;
+  document.getElementById('mrDailyRefDate').value = addDaysISO(ref.iso, 1);
+  renderDailyBookingCurve();
+});
+
+function renderDailyBookingCurve(){
+  const ref = readDateInput('mrDailyRefDate');
+  const emptyEl = document.getElementById('mrDailyEmpty');
+  const bodyEl = document.getElementById('mrDailyBody');
+  if(!ref){ emptyEl.style.display='block'; bodyEl.style.display='none'; return; }
+  emptyEl.style.display='none'; bodyEl.style.display='block';
+
+  const stayISO = ref.iso;
+  const priorStayISO = addYearsISO(stayISO, -1);
+  const prior2StayISO = addYearsISO(stayISO, -2);
+  const now = new Date();
+  const cutoffISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const maxOffset = state.mrDailyPeriod;
+  const metricKey = state.mrDailyMetric;
+  const unit = metricKey==='sales' ? '円' : '室';
+
+  const [ry,rm,rd] = stayISO.split('-');
+  document.getElementById('mrDailyTitle').textContent = `${ry}年${Number(rm)}月${Number(rd)}日`;
+
+  const curSeriesRaw = singleDateBookingSeries(stayISO, maxOffset);
+  const priorSeriesRaw = singleDateBookingSeries(priorStayISO, maxOffset);
+  const prior2SeriesRaw = singleDateBookingSeries(prior2StayISO, maxOffset);
+  const daysA = curSeriesRaw.map(p=>p.date);
+
+  const labels = curSeriesRaw.map(p=>offsetLabelFor(p.offset));
+  const curData = curSeriesRaw.map(p=>p[metricKey]);
+  const priorData = priorSeriesRaw.map(p=>p[metricKey]);
+  const prior2Data = prior2SeriesRaw.map(p=>p[metricKey]);
+
+  const pivotIdx = daysA.findIndex(d=>d===cutoffISO);
+  const lastKnownIdx = pivotIdx>=0 ? pivotIdx : (()=>{ let idx=-1; curData.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
+  const forecastData = computeBlendedForecast(curData, priorData, prior2Data, lastKnownIdx);
+
+  document.getElementById('mrDailyChartSub').textContent =
+    `${metricKey==='sales'?'売上':'販売客室数'} — 基準日:${cutoffISO}(実データはここまで、以降は着地予測) — ${maxOffset}〜0日 青:${prior2StayISO}　オレンジ:${priorStayISO}　緑:${stayISO}　赤:着地予測`;
+
+  if(mrDailyChart) mrDailyChart.destroy();
+  const ctx = document.getElementById('mrDailyChart').getContext('2d');
+  const datasets = [
+    { label:prior2StayISO, data:prior2Data, borderColor:'#1E88E5', backgroundColor:'transparent', borderWidth:0.7, pointRadius:0, tension:0.1, spanGaps:true },
+    { label:priorStayISO, data:priorData, borderColor:'#FB8C00', backgroundColor:'transparent', borderWidth:0.7, pointRadius:0, tension:0.1, spanGaps:true },
+    { label:stayISO, data:curData, borderColor:'#2E7D32', backgroundColor:'#2E7D3215', borderWidth:0.9, pointRadius:0, tension:0.1, spanGaps:true, fill:true },
+    { label:'着地予測', data:forecastData, borderColor:'#E53935', backgroundColor:'transparent', borderDash:[5,4], borderWidth:0.9, pointRadius:0, tension:0.1, spanGaps:true }
+  ];
+  mrDailyChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2,
+      plugins:{
+        legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
+        tooltip:{
+          mode:'index', intersect:false,
+          callbacks:{
+            title:(items)=>{
+              if(!items.length) return '';
+              const d = daysA[items[0].dataIndex];
+              if(!d) return '';
+              const [yy,mm,dd] = d.split('-');
+              return `${Number(mm)}月${Number(dd)}日`;
+            },
+            label:(c)=> c.formattedValue==null ? `${c.dataset.label}: -` : `${c.dataset.label}: ${unit==='円'?'¥':''}${Number(c.raw).toLocaleString()}${unit==='室'?'室':''}`
+          }
+        }
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{maxRotation:0, minRotation:0, autoSkip:false, font:{size:6}} },
+        y:{ beginAtZero:true, grid:{color:'#E9EBEF'} }
+      }
+    }
+  });
+}
+
+let mrInvChart = null;
+// 折れ線の点の上に、実際の数値をそのまま描き込む(参考画像と同じ見た目にするための自前プラグイン)
+const numberLabelPlugin = {
+  id: 'numberLabelPlugin',
+  afterDatasetsDraw(chart){
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((ds, dsIndex)=>{
+      if(!ds.showValueLabels) return;
+      const meta = chart.getDatasetMeta(dsIndex);
+      if(meta.hidden) return;
+      meta.data.forEach((point, i)=>{
+        const v = ds.data[i];
+        if(v==null) return;
+        ctx.save();
+        ctx.fillStyle = ds.labelColor || '#1B2333';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.round(v), point.x, point.y - 6);
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// ---------- チャンネル別分析(仮想データ) ----------
+// シード付き擬似乱数(毎回同じ見た目になるように、日付ベースでシードを変える)
+function seededRandom(seed){
+  let s = seed % 2147483647;
+  if (s <= 0) s += 2147483646;
+  return function(){
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+// 実際に「レベニューアシスタント」の販売先フィルタで確認した、穂々さんの実チャンネル一覧。
+// 各チャンネルごとの正確な内訳数値までは画面上に出ていなかったため、実際の合計(2025年5-10月着地: 179,051,925円)を
+// 一般的なウェイトで配分している(じゃらん自身のツールなのでじゃらん経由が最大、以下自社HP・OTA・代理店の順)。
+const CHANNEL_TARGET_OTAS = [
+  ['じゃらん', Math.round(179051925*0.42)], ['自社HP', Math.round(179051925*0.22)],
+  ['Booking.com', Math.round(179051925*0.14)], ['Expedia', Math.round(179051925*0.10)],
+  ['ゆこゆこ', Math.round(179051925*0.06)], ['農協観光', Math.round(179051925*0.04)],
+  ['その他', Math.round(179051925*0.02)]
+];
+const CHANNEL_WEEKLY_OTAS = CHANNEL_TARGET_OTAS;
+
+function renderChannelAnalysis(){
+  const container = document.getElementById('channelAnalysisBlock');
+  if(!container) return;
+  const rand = seededRandom(20260801);
+  const fmt = (n)=> Math.round(n).toLocaleString();
+
+  // ---- 来期目標テーブル ----
+  const months = [6,7,8,9];
+  let targetRows = '';
+  const monthTotals = {6:0,7:0,8:0,9:0};
+  let landedTotalSum = 0;
+  CHANNEL_TARGET_OTAS.forEach(([name, landed])=>{
+    landedTotalSum += landed;
+    let cells = '';
+    months.forEach(mo=>{
+      const frac = 0.08 + rand()*0.30; // 月ごとにランダムな割合(8〜38%程度)
+      const val = landed * frac;
+      monthTotals[mo] += val;
+      const rate = landed>0 ? Math.round(val/landed*100) : 0;
+      cells += `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(val)}</td>`+
+               `<td style="text-align:center; padding:6px 10px; border:1px solid #ddd; background:#FFF200; font-weight:600;">${rate}%</td>`;
+    });
+    targetRows += `<tr><td style="padding:6px 10px; border:1px solid #ddd;">${name}</td>`+
+      `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#E8EEF7;">${fmt(landed)}</td>${cells}</tr>`;
+  });
+  let totalCells = '';
+  months.forEach(mo=>{
+    const rate = landedTotalSum>0 ? Math.round(monthTotals[mo]/landedTotalSum*100) : 0;
+    totalCells += `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; font-weight:700;">${fmt(monthTotals[mo])}</td>`+
+                  `<td style="text-align:center; padding:6px 10px; border:1px solid #ddd; background:#FFF200; font-weight:700;">${rate}%</td>`;
+  });
+  const targetHeader = months.map(mo=>
+    `<th style="padding:6px 10px; border:1px solid #ddd; background:#F4F5F7;">${mo}月</th>`+
+    `<th style="padding:6px 10px; border:1px solid #ddd; background:#FFF200;">目標達成率</th>`
+  ).join('');
+
+  const targetTable = `
+    <div style="font-weight:700; font-size:13px; margin-bottom:6px;">来期目標 <span style="font-weight:400; font-size:11px; color:var(--ink-soft);">(仮想昨年データ：各予約±10%ランダム変動で生成)</span></div>
+    <div style="overflow-x:auto; margin-bottom:22px;">
+    <table style="border-collapse:collapse; font-size:11.5px; white-space:nowrap;">
+      <thead><tr>
+        <th style="padding:6px 10px; border:1px solid #ddd; background:#F4F5F7;">OTA／サイト</th>
+        <th style="padding:6px 10px; border:1px solid #ddd; background:#E8EEF7;">仮想昨年着地予想<br>(ランダム変動後)</th>
+        ${targetHeader}
+      </tr></thead>
+      <tbody>
+        ${targetRows}
+        <tr style="font-weight:700; background:#F4F5F7;">
+          <td style="padding:6px 10px; border:1px solid #ddd;">合計</td>
+          <td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(landedTotalSum)}</td>
+          ${totalCells}
+        </tr>
+      </tbody>
+    </table>
+    </div>`;
+
+  // ---- 週別実績テーブル ----
+  let weeklyRows = '';
+  const weekTotals = Array.from({length:5},()=>({cur:0, prior:0}));
+  let weeklyLandedSum = 0;
+  CHANNEL_WEEKLY_OTAS.forEach(([name, landed])=>{
+    weeklyLandedSum += landed;
+    if(landed<=0){
+      weeklyRows += `<tr><td style="padding:6px 10px; border:1px solid #ddd;">${name}</td>`+
+        `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">-</td>`+
+        Array.from({length:5}).map(()=>`<td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">-</td><td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">-</td>`).join('')+
+        `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">-</td></tr>`;
+      return;
+    }
+    let cells = '';
+    for(let w=0; w<5; w++){
+      const pace = (w+1)/5; // 週が進むほど累積が増える
+      const curVal = landed * pace * (0.92 + rand()*0.16);
+      const priorVal = landed * pace * (0.90 + rand()*0.14);
+      weekTotals[w].cur += curVal; weekTotals[w].prior += priorVal;
+      cells += `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(curVal)}</td>`+
+               `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; color:var(--ink-soft);">${fmt(priorVal)}</td>`;
+    }
+    weeklyRows += `<tr><td style="padding:6px 10px; border:1px solid #ddd;">${name}</td>`+
+      `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">${fmt(landed)}</td>`+
+      cells+
+      `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">${fmt(landed)}</td></tr>`;
+  });
+  let weekTotalCells = '';
+  weekTotals.forEach(wt=>{
+    weekTotalCells += `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; font-weight:700;">${fmt(wt.cur)}</td>`+
+                       `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; font-weight:700;">${fmt(wt.prior)}</td>`;
+  });
+  const weekHeader = [1,2,3,4,5].map(w=>
+    `<th colspan="2" style="padding:6px 10px; border:1px solid #ddd; background:#F4E3E3;">${w}週目${w===1?'(当月)':''}</th>`
+  ).join('');
+  const weekSubHeader = [1,2,3,4,5].map(()=>
+    `<th style="padding:4px 8px; border:1px solid #ddd; background:#FAF2F2; font-weight:500; font-size:10.5px;">当年オンハンド</th>`+
+    `<th style="padding:4px 8px; border:1px solid #ddd; background:#FAF2F2; font-weight:500; font-size:10.5px;">昨年オンハンド(仮想)</th>`
+  ).join('');
+
+  const weeklyTable = `
+    <div style="font-weight:700; font-size:13px; margin-bottom:6px; display:flex; justify-content:space-between;">
+      <span>週別実績 <span style="font-weight:400; font-size:11px; color:var(--ink-soft);">(仮想昨年データ：各予約±10%ランダム変動で生成)</span></span>
+      <span style="font-weight:400; font-size:11px; color:var(--ink-soft);">(単位：円)</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="border-collapse:collapse; font-size:11.5px; white-space:nowrap;">
+      <thead>
+        <tr>
+          <th rowspan="2" style="padding:6px 10px; border:1px solid #ddd; background:#F4F5F7;">OTA／サイト</th>
+          <th rowspan="2" style="padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">仮想昨年着地<br>(ランダム変動後)</th>
+          ${weekHeader}
+          <th rowspan="2" style="padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">仮想昨年着地<br>(ランダム変動後)</th>
+        </tr>
+        <tr>${weekSubHeader}</tr>
+      </thead>
+      <tbody>
+        ${weeklyRows}
+        <tr style="font-weight:700; background:#F4F5F7;">
+          <td style="padding:6px 10px; border:1px solid #ddd;">合計</td>
+          <td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(weeklyLandedSum)}</td>
+          ${weekTotalCells}
+          <td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(weeklyLandedSum)}</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>`;
+
+  container.innerHTML = targetTable + weeklyTable;
+}
+
+function renderInventoryChart(){
+  const y = state.mrInvYear, m = state.mrInvMonth;
+  document.getElementById('mrInvMonthTitle').textContent = `${y}年${m}月`;
+
+  const now = new Date();
+  const cutoffISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  const daysA = datesInMonth(y, m);
+  const landedData = daysA.map(d=>landedPriorValue(d,'rooms'));   // 灰=前年最終実績(そのままの高さ)
+  const pacingData = daysA.map(d=>pacingPriorValue(d,'rooms',cutoffISO)); // 橙=前年同日水準(そのままの高さ)
+  // 基準日(今日)までは実データ、それより先は3年分のデータを使った着地予測で埋める(1日〜末日まで途切れず表示するため)
+  const actualData = daysA.map(d=>dayActual(d,'rooms',cutoffISO));
+  const landedFull = daysA.map(d=>landedPriorValue(d,'rooms'));
+  const pivotIdx = daysA.findIndex(d=>d===cutoffISO);
+  const lastKnownIdx = pivotIdx>=0 ? pivotIdx : (()=>{ let idx=-1; actualData.forEach((v,i)=>{ if(v!=null) idx=i; }); return idx; })();
+  const prior2Full = daysA.map(d=>landedPrior2Value(d,'rooms'));
+  const forecastFill = computeBlendedForecast(actualData, landedFull, prior2Full, lastKnownIdx);
+  const curData = actualData.map((v,i)=> v!=null ? v : forecastFill[i]); // 青/赤=今年の実績(そのままの高さ)
+  const labels = daysA.map(d=>`${Number(d.slice(8,10))}`); // 単月表示なので1〜30/31日を全部表示
+
+  const COLOR_BLUE='#1E88E5', COLOR_RED='#E53935', COLOR_ORANGE='#FB8C00', COLOR_GRAY='#9E9E9E', COLOR_LINE='#2E5C4A';
+
+  // 赤は「前年同日水準に届かなかった」時だけ使うので、定義上そもそも橙(前年同日水準)を超えることはない。
+  const achievedColors = curData.map((v,i)=>{
+    const pacing = pacingData[i];
+    if(v==null) return COLOR_GRAY;
+    return (pacing==null || v >= pacing) ? COLOR_BLUE : COLOR_RED;
+  });
+
+  if(mrInvChart) mrInvChart.destroy();
+  const ctx2 = document.getElementById('mrInvChart').getContext('2d');
+  mrInvChart = new Chart(ctx2, {
+    data:{
+      labels,
+      datasets:[
+        // 太さ: 灰=1cm相当(一番太い/背景) → 橙=8mm相当 → 青・赤=5mm相当(一番細い/手前)。同じ位置に重ねて表示する。
+        { type:'bar', label:'灰=前年最終実績', data:landedData, backgroundColor:COLOR_GRAY, barPercentage:0.95, categoryPercentage:0.9, grouped:false, order:3 },
+        { type:'bar', label:'橙=前年同日水準', data:pacingData, backgroundColor:COLOR_ORANGE, barPercentage:0.75, categoryPercentage:0.9, grouped:false, order:2 },
+        { type:'bar', label:'今年度(青=前年同日ペース以上/赤=未達)', data:curData, backgroundColor:achievedColors, barPercentage:0.48, categoryPercentage:0.9, grouped:false, order:1 },
+        { type:'line', label:'今年度 推移', data:curData, borderColor:COLOR_LINE, backgroundColor:'transparent', borderWidth:1.3, pointRadius:2, pointBackgroundColor:COLOR_LINE, tension:0.15, spanGaps:true, showValueLabels:true, labelColor:COLOR_LINE, order:0 }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.0,
+      plugins:{
+        legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:10}}},
+        tooltip:{
+          mode:'index', intersect:false,
+          callbacks:{ label:(c)=> c.formattedValue==null ? null : `${c.dataset.label}: ${Number(c.raw).toLocaleString()}室` }
+        }
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{maxRotation:0, minRotation:0, autoSkip:false, font:{size:8}} },
+        y:{ beginAtZero:true, grid:{color:'#E9EBEF'} }
+      }
+    },
+    plugins:[numberLabelPlugin]
   });
 }
 
@@ -1388,15 +2111,8 @@ document.getElementById('diffWindowBoth').addEventListener('click', ()=>setDiffW
 
 function renderCalendar(){
   if(state.curYear==null || state.curMonth==null){
-    // pick most recent stayISO available, else current month
-    const keys = Object.keys(state.allData).sort();
-    if(keys.length){
-      const [y,m] = keys[keys.length-1].split('-').map(Number);
-      state.curYear=y; state.curMonth=m;
-    } else {
-      const now = new Date();
-      state.curYear = now.getFullYear(); state.curMonth = now.getMonth()+1;
-    }
+    const now = new Date();
+    state.curYear = now.getFullYear(); state.curMonth = now.getMonth()+1;
   }
   const y0=state.curYear, m0=state.curMonth;
   let y2=y0, m2=m0+2; while(m2>12){ m2-=12; y2++; }
@@ -1469,6 +2185,13 @@ function renderCalendar(){
         cell.innerHTML = `<div class="d">${d}</div>`;
       }
       grid.appendChild(cell);
+      cell.addEventListener('click', ()=>{
+        document.getElementById('mrDailyRefDate').value = stayISO;
+        renderDailyBookingCurve();
+        const sec = document.getElementById('section-dailycurve');
+        sec.classList.remove('collapsed');
+        sec.scrollIntoView({behavior:'smooth', block:'start'});
+      });
     }
     if(!anyData){
       // no explicit per-column empty state; overall empty-note below covers the whole 3-month window
@@ -1497,7 +2220,7 @@ function hexToRgb(hex){
     console.error('loadAll failed', e);
   }
   renderCalendar();
-  populateMrMonthSelect(); renderMonthlyDayCurve();
+  populateMrMonthSelect(); renderMonthlyDayCurve(); renderInventoryChart(); renderChannelAnalysis(); renderDailyBookingCurve();
   renderMonthlyReport();
   if(Object.keys(state.allData).length){
     setStatus(`サーバーから読み込みました(${Object.keys(state.allData).length}日分、全利用者共通データ)。`, 'ok');
