@@ -48,10 +48,10 @@
   header .ghost{ background:transparent; color:#fff; border:1px solid rgba(255,255,255,.35); }
   header .ghost:hover{ background:rgba(255,255,255,.12); }
   .headline-note{ color:#9FB0C3; font-size:12px;}
-  main{ margin:0 2mm; padding:22px 5px 60px;}
+  main{ margin:0 2mm; padding:22px 5px 60px; width:calc(100% - 4mm);}
   .card{
     background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
-    padding:18px 5px; margin-bottom:18px;
+    padding:18px 5px; margin-bottom:18px; width:100%;
   }
   .card h2{ font-size:14px; margin:0 0 12px; color:var(--navy); letter-spacing:.03em; font-weight:700;}
   .row{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;}
@@ -87,7 +87,7 @@
   .grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
   .dow{ text-align:center; font-size:10.5px; color:var(--ink-soft); padding-bottom:4px; font-weight:600;}
   .dow.sun{ color:var(--coral); } .dow.sat{ color:var(--blue); }
-  .cal-3col{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; width:1180.1px; height:578.6px; overflow-y:auto; }
+  .cal-3col{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; width:100%; }
   .cal-month-col{ min-width:0; }
   .cal-month-col .month-label{ font-size:13px; font-weight:700; margin-bottom:8px; color:var(--ink); }
   .cell{
@@ -106,16 +106,14 @@
 
   .curve-title{ font-size:18px; font-weight:700; margin-bottom:2px; }
   .curve-sub{ font-size:12px; color:var(--ink-soft); margin-bottom:14px; }
-  .chart-block{ margin-bottom:22px; }
+  .chart-block{ margin-bottom:22px; width:100%; }
   .chart-block-primary{
     background:#F3F0EA; border:1px solid var(--coral-soft); border-radius:10px;
-    padding:14px 16px 6px; margin-bottom:22px;
-    width:1180.1px; height:251.6px; overflow:hidden;
+    padding:14px 16px 6px; margin-bottom:22px; width:100%;
   }
   .chart-block-primary h3{ color:var(--coral); font-size:13.5px; }
   .chart-block h3{ font-size:12.5px; color:var(--navy); margin:0 0 6px; font-weight:700;}
-  canvas{ width:100% !important; height:100% !important; }
-  #channelAnalysisBlock{ width:1180.1px; height:329.6px; overflow:auto; }
+  canvas{ max-height:230px; width:100% !important; }
   .empty-note{
     text-align:center; color:var(--ink-soft); font-size:13px; padding:40px 10px;
     border:1px dashed var(--line); border-radius:8px;
@@ -1562,7 +1560,7 @@ function renderMonthlyReport(){
       datasets
     },
     options:{
-      responsive:true, maintainAspectRatio:false, resizeDelay:1000,
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2, resizeDelay:1000,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
         tooltip:{
@@ -1758,7 +1756,7 @@ function renderMonthlyDayCurve(){
     type:'line',
     data:{ labels, datasets },
     options:{
-      responsive:true, maintainAspectRatio:false, resizeDelay:1000,
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2, resizeDelay:1000,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
         tooltip:{
@@ -1878,7 +1876,7 @@ function renderDailyBookingCurve(){
     type:'line',
     data:{ labels, datasets },
     options:{
-      responsive:true, maintainAspectRatio:false, resizeDelay:1000,
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2, resizeDelay:1000,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
         tooltip:{
@@ -2147,7 +2145,7 @@ function renderInventoryChart(){
       ]
     },
     options:{
-      responsive:true, maintainAspectRatio:false, resizeDelay:1000,
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.0, resizeDelay:1000,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:10}}},
         tooltip:{
