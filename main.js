@@ -77,15 +77,6 @@ async function createWindow() {
   if (!app.isPackaged) {
     win.webContents.openDevTools();
   }
-  // 指定サイズで固定表示するため、ズーム操作自体をブロックする(CSSで指定した固定サイズが
-  // Ctrl+-等で崩れないように)。
-  win.webContents.on("before-input-event", (event, input) => {
-    const isZoomKey = (input.control || input.meta) &&
-      (input.key === "-" || input.key === "=" || input.key === "+" || input.key === "0");
-    if (isZoomKey) {
-      event.preventDefault();
-    }
-  });
   await win.loadURL("http://127.0.0.1:3000");
 }
 
