@@ -1560,7 +1560,7 @@ function renderMonthlyReport(){
       datasets
     },
     options:{
-      responsive:true, maintainAspectRatio:true, aspectRatio:2.2,
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2, resizeDelay:200,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
         tooltip:{
@@ -1756,7 +1756,7 @@ function renderMonthlyDayCurve(){
     type:'line',
     data:{ labels, datasets },
     options:{
-      responsive:true, maintainAspectRatio:true, aspectRatio:2.2,
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2, resizeDelay:200,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
         tooltip:{
@@ -1876,7 +1876,7 @@ function renderDailyBookingCurve(){
     type:'line',
     data:{ labels, datasets },
     options:{
-      responsive:true, maintainAspectRatio:true, aspectRatio:2.2,
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.2, resizeDelay:200,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:11}}},
         tooltip:{
@@ -2145,7 +2145,7 @@ function renderInventoryChart(){
       ]
     },
     options:{
-      responsive:true, maintainAspectRatio:true, aspectRatio:2.0,
+      responsive:true, maintainAspectRatio:true, aspectRatio:2.0, resizeDelay:200,
       plugins:{
         legend:{display:true, position:'bottom', labels:{boxWidth:12, font:{size:10}}},
         tooltip:{

@@ -78,9 +78,6 @@ async function createWindow() {
     win.webContents.openDevTools();
   }
   await win.loadURL("http://127.0.0.1:3000");
-  // ウィンドウ全体を「Ctrl+-を1回押した」状態にする(Electron本体のズーム機能。CSSのzoomとは別物で、
-  // ブラウザの拡大縮小と同じ仕組みのためChart.jsとの干渉によるループは起きない)。
-  win.webContents.zoomLevel = -1;
 }
 
 app.whenReady().then(async () => {
