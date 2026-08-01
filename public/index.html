@@ -120,6 +120,23 @@
   }
   .kpis{ display:flex; gap:22px; margin-bottom:14px; flex-wrap:wrap;}
   .kpi .v{ font-size:20px; font-weight:800; }
+
+  /* チャンネル別分析テーブル: 他カードと統一感のある配色(navy/coral/line変数を使用) */
+  .chSectionTitle{ font-weight:700; font-size:13px; margin-bottom:8px; color:var(--navy); }
+  .chSectionNote{ font-weight:400; font-size:11px; color:var(--ink-soft); }
+  .chTable{ border-collapse:collapse; font-size:11.5px; white-space:nowrap; }
+  .chTd{ padding:6px 10px; border:1px solid var(--line); background:#fff; }
+  .chTdNum{ text-align:right; }
+  .chTdRate{ text-align:center; background:var(--coral-soft); font-weight:600; color:var(--coral); }
+  .chTdRef{ background:#F4F5F7; color:var(--ink-soft); }
+  .chTdMuted{ color:var(--ink-soft); }
+  .chTdTotal{ font-weight:700; }
+  .chTotalRow{ font-weight:700; background:#F4F5F7; }
+  .chTh{ padding:6px 10px; border:1px solid var(--line); background:var(--navy); color:#fff; font-weight:600; }
+  .chThRef{ background:#5C6577; }
+  .chThRate{ background:var(--coral); }
+  .chThWeek{ background:var(--blue); }
+  .chThSub{ background:#EFF2F6; color:var(--ink); font-weight:500; font-size:10.5px; }
   .kpi .l{ font-size:11px; color:var(--ink-soft); }
   .cell.selected{ outline:2px solid var(--navy); outline-offset:-2px; }
   a.back{ font-size:12.5px; color:var(--navy); cursor:pointer; text-decoration:underline; }
@@ -157,11 +174,11 @@
           <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
         </div>
         <div>
-          <label>取得日(スナップショット日) ※Excelのみ使用</label>
+          <label>取得日(スナップショット日)</label>
           <input type="date" id="snapDate">
         </div>
         <div>
-          <label>年(西暦・シート内に年表記が無いため指定) ※Excelのみ使用</label>
+          <label>年</label>
           <input type="number" id="baseYear" style="width:90px;">
         </div>
         <div>
@@ -345,6 +362,16 @@
   <div class="card collapsible draggable-section" id="section-channel" draggable="true">
     <h2 class="collapsible-head" data-target="channelCollapseBody"><span><span class="drag-handle">⠿</span> チャンネル別分析</span> <span class="chev">▾</span></h2>
     <div class="collapsible-body" id="channelCollapseBody">
+      <div class="row" style="margin-bottom:14px; align-items:flex-end;">
+        <div>
+          <label>表示する月(開始)</label>
+          <input type="month" id="chFromMonth">
+        </div>
+        <div>
+          <label>表示する月(終了)</label>
+          <input type="month" id="chToMonth">
+        </div>
+      </div>
       <div id="channelAnalysisBlock"></div>
     </div>
   </div>
@@ -379,7 +406,7 @@
 
 <script>
 const COLS = ['曜日','日','ランク','室数','人数合計','大人','子供','室料','稼働率','DOR','ADR','RevPAR','売止'];
-const state = { allData:{}, allDataGross:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null };
+const state = { allData:{}, allDataGross:{}, channelData:{}, settings:{capacity:68}, settingsLoaded:false, capacityLocalPending:false, curMonth:null, curYear:null, curStayISO:null };
 let charts = [];
 
 function todayISO(){
@@ -419,6 +446,7 @@ async function apiDelete(pathSuffix){
 async function loadAll(){
   state.allData = await apiGet('/data');
   state.allDataGross = await apiGet('/data-gross');
+  state.channelData = await apiGet('/data-channel');
   const savedSettings = await apiGet('/settings');
   // While a local capacity edit is being saved (or was just saved), NEVER let a server
   // fetch overwrite it — no matter how the timing lines up. This is the one field the
@@ -440,6 +468,10 @@ async function pushPoints(points){
 async function pushPointsGross(points){
   if(!points || !points.length) return;
   await apiPost('/data-gross', {points});
+}
+async function pushChannelPoints(points){
+  if(!points || !points.length) return;
+  await apiPost('/data-channel', {points});
 }
 async function saveSettings(){
   await apiPost('/settings', state.settings);
@@ -619,6 +651,81 @@ async function readFileAsText(file){
   }catch(e){
     return new TextDecoder('utf-8').decode(buf);
   }
+}
+
+// チャンネル別分析用: 販売先名(row[1])ごとに宿泊日別の予約推移を集計する。
+// メインのparseCSVReservationsとは別に、(販売先名, チェックイン日)単位でグループ化する
+// (名前ではなくチャンネルでまとめたいので、意図的にロジックを分けている)。
+function parseChannelData(csvText){
+  const lines = csvText.split(/\r\n|\n/).filter(l=>l.length>0);
+  const rows = lines.map(parseCSVLine);
+  const dataRows = rows.slice(1);
+
+  const groups = new Map(); // key = channel + '|' + checkinISO
+  dataRows.forEach(row=>{
+    if(row.length<21) return;
+    const type = row[0];
+    const channel = (row[1]||'不明').trim() || '不明';
+    const receivedISO = ymdToISO(row[3]);
+    const checkinISO = ymdToISO(row[6]);
+    const checkoutISO = ymdToISO(row[7]);
+    const nights = Number(row[8])||0;
+    const rooms = Number(row[9])||0;
+    const totalPrice = Number(row[20])||0;
+    if(!receivedISO || !checkinISO || !checkoutISO || nights<=0) return;
+    if(type!=='予約' && type!=='変更' && type!=='取消') return;
+    const key = channel + '|' + checkinISO;
+    if(!groups.has(key)) groups.set(key, {channel, events:[]});
+    groups.get(key).events.push({type, receivedISO, checkinISO, checkoutISO, nights, rooms, totalPrice});
+  });
+
+  // channel -> stayISO -> [transitions] (summed across all guests in that channel+night)
+  const channelPoints = []; // flat list: {channel, stayISO, snapshotISO, rooms, sales}
+  const byChannelNight = new Map(); // channel -> Map(night -> transitions[])
+
+  for(const {channel, events} of groups.values()){
+    events.sort((a,b)=> a.receivedISO<b.receivedISO?-1:a.receivedISO>b.receivedISO?1:0);
+    const transitions = [];
+    events.forEach(ev=>{
+      const s = ev.type==='取消'
+        ? { rooms:0, salesPerNight:0, checkinISO:ev.checkinISO, checkoutISO:ev.checkoutISO }
+        : { rooms:ev.rooms, salesPerNight: ev.nights>0 ? ev.totalPrice/ev.nights : 0, checkinISO:ev.checkinISO, checkoutISO:ev.checkoutISO };
+      transitions.push({ atISO: ev.receivedISO, ...s });
+    });
+    if(!transitions.length) continue;
+    const nightSet = new Set();
+    transitions.forEach(tr=>{
+      let d = isoToUTCDate(tr.checkinISO);
+      const end = isoToUTCDate(tr.checkoutISO);
+      let g=0;
+      while(d < end && g<400){ nightSet.add(utcDateToISO(d)); d.setUTCDate(d.getUTCDate()+1); g++; }
+    });
+    if(!byChannelNight.has(channel)) byChannelNight.set(channel, new Map());
+    const nightMap = byChannelNight.get(channel);
+    nightSet.forEach(n=>{
+      if(!nightMap.has(n)) nightMap.set(n, []);
+      nightMap.get(n).push(transitions);
+    });
+  }
+
+  for(const [channel, nightMap] of byChannelNight.entries()){
+    for(const [night, transitionLists] of nightMap.entries()){
+      const times = [...new Set(transitionLists.flatMap(trs=>trs.map(t=>t.atISO)))].sort();
+      times.forEach(t=>{
+        let totalRooms=0, totalSales=0;
+        transitionLists.forEach(trs=>{
+          let active = null;
+          for(const tr of trs){ if(tr.atISO<=t) active=tr; else break; }
+          if(active){
+            const d = isoToUTCDate(night), ci = isoToUTCDate(active.checkinISO), co = isoToUTCDate(active.checkoutISO);
+            if(d>=ci && d<co){ totalRooms += active.rooms; totalSales += active.salesPerNight; }
+          }
+        });
+        channelPoints.push({channel, stayISO:night, snapshotISO:t, rooms:totalRooms, sales:totalSales});
+      });
+    }
+  }
+  return { points: channelPoints };
 }
 
 function parseCSVReservations(csvText){
@@ -868,9 +975,11 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
     state.settings.capacity = capacity;
 
     let result;
+    let channelResult = null;
     if(isCSV){
       const csvText = await readFileAsText(file);
       result = parseCSVReservations(csvText);
+      channelResult = parseChannelData(csvText);
     } else {
       const snapDate = document.getElementById('snapDate').value;
       const baseYear = parseInt(document.getElementById('baseYear').value,10);
@@ -900,6 +1009,7 @@ document.getElementById('loadBtn').addEventListener('click', async ()=>{
     try{
       await pushPoints(result.flatPoints);
       if(result.flatPointsGross) await pushPointsGross(result.flatPointsGross);
+      if(channelResult && channelResult.points.length) await pushChannelPoints(channelResult.points);
       await saveSettings();
       await loadAll(); // refresh from server, picks up anything other users just added too
       renderCalendar();
@@ -930,10 +1040,12 @@ async function checkIncomingCSVs(){
       if(!textRes.ok) continue;
       const csvText = await textRes.text();
       const result = parseCSVReservations(csvText);
+      const channelResult = parseChannelData(csvText);
       totalPoints += result.points;
       result.stayDates.forEach(d=>totalDates.add(d));
       if(result.flatPoints.length) await pushPoints(result.flatPoints);
       if(result.flatPointsGross && result.flatPointsGross.length) await pushPointsGross(result.flatPointsGross);
+      if(channelResult.points.length) await pushChannelPoints(channelResult.points);
       await fetch(API_BASE + '/csv/incoming/' + encodeURIComponent(filename), {method:'DELETE'});
     }
 
@@ -962,11 +1074,14 @@ async function checkIncomingCSVs(){
 document.getElementById('checkIncomingBtn').addEventListener('click', checkIncomingCSVs);
 
 
+document.getElementById('chFromMonth').addEventListener('change', renderChannelAnalysis);
+document.getElementById('chToMonth').addEventListener('change', renderChannelAnalysis);
 document.getElementById('clearBtn').addEventListener('click', async ()=>{
   if(!confirm('サーバー上の全てのブッキングカーブデータを削除します(他の利用者の分も含みます)。よろしいですか？')) return;
   try{
     await apiDelete('/data');
     await apiDelete('/data-gross');
+    await apiDelete('/data-channel');
     await loadAll();
     renderCalendar();
     populateMrMonthSelect(); renderMonthlyDayCurve(); renderInventoryChart(); renderChannelAnalysis(); renderDailyBookingCurve();
@@ -1810,147 +1925,175 @@ const numberLabelPlugin = {
   }
 };
 
-// ---------- チャンネル別分析(仮想データ) ----------
-// シード付き擬似乱数(毎回同じ見た目になるように、日付ベースでシードを変える)
-function seededRandom(seed){
-  let s = seed % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return function(){
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
+// ---------- チャンネル別分析(実データ: CSV取込の「販売先名」列から集計) ----------
+function channelValueAsOf(channel, dateISO, snapCutoff){
+  const rec = state.channelData[channel] && state.channelData[channel][dateISO];
+  return valueAsOf(rec, snapCutoff);
 }
-
-// 実際に「レベニューアシスタント」の販売先フィルタで確認した、穂々さんの実チャンネル一覧。
-// 各チャンネルごとの正確な内訳数値までは画面上に出ていなかったため、実際の合計(2025年5-10月着地: 179,051,925円)を
-// 一般的なウェイトで配分している(じゃらん自身のツールなのでじゃらん経由が最大、以下自社HP・OTA・代理店の順)。
-const CHANNEL_TARGET_OTAS = [
-  ['じゃらん', Math.round(179051925*0.42)], ['自社HP', Math.round(179051925*0.22)],
-  ['Booking.com', Math.round(179051925*0.14)], ['Expedia', Math.round(179051925*0.10)],
-  ['ゆこゆこ', Math.round(179051925*0.06)], ['農協観光', Math.round(179051925*0.04)],
-  ['その他', Math.round(179051925*0.02)]
-];
-const CHANNEL_WEEKLY_OTAS = CHANNEL_TARGET_OTAS;
+function channelLatest(channel, dateISO){
+  const rec = state.channelData[channel] && state.channelData[channel][dateISO];
+  if(!rec) return null;
+  const keys = Object.keys(rec).sort();
+  return keys.length ? rec[keys[keys.length-1]] : null;
+}
+function channelMonthTotal(channel, y, m, key){
+  let total = 0;
+  datesInMonth(y,m).forEach(d=>{
+    const v = channelLatest(channel, d);
+    if(v) total += v[key];
+  });
+  return total;
+}
 
 function renderChannelAnalysis(){
   const container = document.getElementById('channelAnalysisBlock');
   if(!container) return;
-  const rand = seededRandom(20260801);
+  const channels = Object.keys(state.channelData||{});
+  if(!channels.length){
+    container.innerHTML = `<div class="empty-note">チャンネル別のデータがまだありません。CSVの「販売先名」列から自動的に集計されます。</div>`;
+    return;
+  }
   const fmt = (n)=> Math.round(n).toLocaleString();
+  const now = new Date();
+  const curY = now.getFullYear(), curM = now.getMonth()+1;
 
-  // ---- 来期目標テーブル ----
-  const months = [6,7,8,9];
+  // 表示する月(開始/終了)の picker から読み取る。未選択なら今月〜3ヶ月後をデフォルトにする。
+  const fromInput = document.getElementById('chFromMonth');
+  const toInput = document.getElementById('chToMonth');
+  if(!fromInput.value) fromInput.value = `${curY}-${String(curM).padStart(2,'0')}`;
+  if(!toInput.value){
+    const d3 = stepMonth(curY, curM, 3);
+    toInput.value = `${d3.y}-${String(d3.m).padStart(2,'0')}`;
+  }
+  const [fromY, fromM] = fromInput.value.split('-').map(Number);
+  const [toY, toM] = toInput.value.split('-').map(Number);
+  const totalMonthSpan = (toY*12+toM) - (fromY*12+fromM);
+  const monthCount = Math.max(1, Math.min(24, totalMonthSpan+1)); // 最大24ヶ月まで(暴走防止)
+
+  // ---- 来期目標テーブル(実データ): 選択した月範囲、前年同月の実績を目標として達成率を出す ----
+  const months = Array.from({length:monthCount}, (_,i)=>stepMonth(fromY, fromM, i));
   let targetRows = '';
-  const monthTotals = {6:0,7:0,8:0,9:0};
+  const monthTotals = months.map(()=>0);
   let landedTotalSum = 0;
-  CHANNEL_TARGET_OTAS.forEach(([name, landed])=>{
+  channels.forEach(channel=>{
+    const priorYear = curY-1;
+    const landed = channels.length ? months.reduce((sum,mo)=> sum + channelMonthTotal(channel, mo.y-1, mo.m, 'sales'), 0) : 0;
     landedTotalSum += landed;
     let cells = '';
-    months.forEach(mo=>{
-      const frac = 0.08 + rand()*0.30; // 月ごとにランダムな割合(8〜38%程度)
-      const val = landed * frac;
-      monthTotals[mo] += val;
-      const rate = landed>0 ? Math.round(val/landed*100) : 0;
-      cells += `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(val)}</td>`+
-               `<td style="text-align:center; padding:6px 10px; border:1px solid #ddd; background:#FFF200; font-weight:600;">${rate}%</td>`;
+    months.forEach((mo,i)=>{
+      const val = channelMonthTotal(channel, mo.y, mo.m, 'sales');
+      monthTotals[i] += val;
+      const monthLanded = channelMonthTotal(channel, mo.y-1, mo.m, 'sales');
+      const rate = monthLanded>0 ? Math.round(val/monthLanded*100) : (val>0 ? 100 : 0);
+      cells += `<td class="chTd chTdNum">${fmt(val)}</td>`+
+               `<td class="chTd chTdRate">${rate}%</td>`;
     });
-    targetRows += `<tr><td style="padding:6px 10px; border:1px solid #ddd;">${name}</td>`+
-      `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#E8EEF7;">${fmt(landed)}</td>${cells}</tr>`;
+    targetRows += `<tr><td class="chTd">${channel}</td>`+
+      `<td class="chTd chTdNum chTdRef">${fmt(landed)}</td>${cells}</tr>`;
   });
   let totalCells = '';
-  months.forEach(mo=>{
-    const rate = landedTotalSum>0 ? Math.round(monthTotals[mo]/landedTotalSum*100) : 0;
-    totalCells += `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; font-weight:700;">${fmt(monthTotals[mo])}</td>`+
-                  `<td style="text-align:center; padding:6px 10px; border:1px solid #ddd; background:#FFF200; font-weight:700;">${rate}%</td>`;
+  months.forEach((mo,i)=>{
+    const monthLandedSum = channels.reduce((s,ch)=>s+channelMonthTotal(ch, mo.y-1, mo.m, 'sales'), 0);
+    const rate = monthLandedSum>0 ? Math.round(monthTotals[i]/monthLandedSum*100) : 0;
+    totalCells += `<td class="chTd chTdNum chTdTotal">${fmt(monthTotals[i])}</td>`+
+                  `<td class="chTd chTdRate chTdTotal">${rate}%</td>`;
   });
   const targetHeader = months.map(mo=>
-    `<th style="padding:6px 10px; border:1px solid #ddd; background:#F4F5F7;">${mo}月</th>`+
-    `<th style="padding:6px 10px; border:1px solid #ddd; background:#FFF200;">目標達成率</th>`
+    `<th class="chTh">${mo.m}月</th><th class="chTh chThRate">目標達成率</th>`
   ).join('');
 
   const targetTable = `
-    <div style="font-weight:700; font-size:13px; margin-bottom:6px;">来期目標 <span style="font-weight:400; font-size:11px; color:var(--ink-soft);">(仮想昨年データ：各予約±10%ランダム変動で生成)</span></div>
+    <div class="chSectionTitle">来期目標 <span class="chSectionNote">(実データ: 前年同月実績を目標として算出)</span></div>
     <div style="overflow-x:auto; margin-bottom:22px;">
-    <table style="border-collapse:collapse; font-size:11.5px; white-space:nowrap;">
+    <table class="chTable">
       <thead><tr>
-        <th style="padding:6px 10px; border:1px solid #ddd; background:#F4F5F7;">OTA／サイト</th>
-        <th style="padding:6px 10px; border:1px solid #ddd; background:#E8EEF7;">仮想昨年着地予想<br>(ランダム変動後)</th>
+        <th class="chTh">OTA／サイト</th>
+        <th class="chTh chThRef">前年同期実績(目標)</th>
         ${targetHeader}
       </tr></thead>
       <tbody>
         ${targetRows}
-        <tr style="font-weight:700; background:#F4F5F7;">
-          <td style="padding:6px 10px; border:1px solid #ddd;">合計</td>
-          <td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(landedTotalSum)}</td>
+        <tr class="chTotalRow">
+          <td class="chTd">合計</td>
+          <td class="chTd chTdNum">${fmt(landedTotalSum)}</td>
           ${totalCells}
         </tr>
       </tbody>
     </table>
     </div>`;
 
-  // ---- 週別実績テーブル ----
+  // ---- 週別実績テーブル(実データ): 表示開始月を5週に区切り、当年/前年オンハンドを実データで表示 ----
+  const monthStart = dateISO(fromY, fromM, 1);
+  const daysInCurMonth = daysInMonthCount(fromY, fromM);
+  const weekRanges = [];
+  for(let w=0; w<5; w++){
+    const startDay = w*7+1;
+    if(startDay > daysInCurMonth) break;
+    const endDay = Math.min(startDay+6, daysInCurMonth);
+    weekRanges.push({start:startDay, end:endDay});
+  }
   let weeklyRows = '';
-  const weekTotals = Array.from({length:5},()=>({cur:0, prior:0}));
+  const weekTotals = weekRanges.map(()=>({cur:0, prior:0}));
   let weeklyLandedSum = 0;
-  CHANNEL_WEEKLY_OTAS.forEach(([name, landed])=>{
+  channels.forEach(channel=>{
+    const landed = channelMonthTotal(channel, fromY-1, fromM, 'sales');
     weeklyLandedSum += landed;
-    if(landed<=0){
-      weeklyRows += `<tr><td style="padding:6px 10px; border:1px solid #ddd;">${name}</td>`+
-        `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">-</td>`+
-        Array.from({length:5}).map(()=>`<td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">-</td><td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">-</td>`).join('')+
-        `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">-</td></tr>`;
-      return;
-    }
     let cells = '';
-    for(let w=0; w<5; w++){
-      const pace = (w+1)/5; // 週が進むほど累積が増える
-      const curVal = landed * pace * (0.92 + rand()*0.16);
-      const priorVal = landed * pace * (0.90 + rand()*0.14);
-      weekTotals[w].cur += curVal; weekTotals[w].prior += priorVal;
-      cells += `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(curVal)}</td>`+
-               `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; color:var(--ink-soft);">${fmt(priorVal)}</td>`;
-    }
-    weeklyRows += `<tr><td style="padding:6px 10px; border:1px solid #ddd;">${name}</td>`+
-      `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">${fmt(landed)}</td>`+
+    let anyData = false;
+    weekRanges.forEach((wr,i)=>{
+      let curSum=0, priorSum=0;
+      for(let d=wr.start; d<=wr.end; d++){
+        const dateThis = dateISO(fromY, fromM, d);
+        const v = channelLatest(channel, dateThis);
+        if(v){ curSum += v.sales; anyData = true; }
+        const priorDate = addYearsISO(dateThis, -1);
+        const vp = channelLatest(channel, priorDate);
+        if(vp) priorSum += vp.sales;
+      }
+      weekTotals[i].cur += curSum; weekTotals[i].prior += priorSum;
+      cells += `<td class="chTd chTdNum">${curSum?fmt(curSum):'-'}</td>`+
+               `<td class="chTd chTdNum chTdMuted">${priorSum?fmt(priorSum):'-'}</td>`;
+    });
+    weeklyRows += `<tr><td class="chTd">${channel}</td>`+
+      `<td class="chTd chTdNum chTdRef">${landed?fmt(landed):'-'}</td>`+
       cells+
-      `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">${fmt(landed)}</td></tr>`;
+      `<td class="chTd chTdNum chTdRef">${landed?fmt(landed):'-'}</td></tr>`;
   });
   let weekTotalCells = '';
   weekTotals.forEach(wt=>{
-    weekTotalCells += `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; font-weight:700;">${fmt(wt.cur)}</td>`+
-                       `<td style="text-align:right; padding:6px 10px; border:1px solid #ddd; font-weight:700;">${fmt(wt.prior)}</td>`;
+    weekTotalCells += `<td class="chTd chTdNum chTdTotal">${fmt(wt.cur)}</td>`+
+                       `<td class="chTd chTdNum chTdTotal">${fmt(wt.prior)}</td>`;
   });
-  const weekHeader = [1,2,3,4,5].map(w=>
-    `<th colspan="2" style="padding:6px 10px; border:1px solid #ddd; background:#F4E3E3;">${w}週目${w===1?'(当月)':''}</th>`
+  const weekHeader = weekRanges.map((wr,i)=>
+    `<th colspan="2" class="chTh chThWeek">${i+1}週目${i===0?`(${fromM}月)`:''}</th>`
   ).join('');
-  const weekSubHeader = [1,2,3,4,5].map(()=>
-    `<th style="padding:4px 8px; border:1px solid #ddd; background:#FAF2F2; font-weight:500; font-size:10.5px;">当年オンハンド</th>`+
-    `<th style="padding:4px 8px; border:1px solid #ddd; background:#FAF2F2; font-weight:500; font-size:10.5px;">昨年オンハンド(仮想)</th>`
+  const weekSubHeader = weekRanges.map(()=>
+    `<th class="chTh chThSub">当年オンハンド</th><th class="chTh chThSub">前年オンハンド</th>`
   ).join('');
 
   const weeklyTable = `
-    <div style="font-weight:700; font-size:13px; margin-bottom:6px; display:flex; justify-content:space-between;">
-      <span>週別実績 <span style="font-weight:400; font-size:11px; color:var(--ink-soft);">(仮想昨年データ：各予約±10%ランダム変動で生成)</span></span>
-      <span style="font-weight:400; font-size:11px; color:var(--ink-soft);">(単位：円)</span>
+    <div class="chSectionTitle" style="display:flex; justify-content:space-between;">
+      <span>週別実績 <span class="chSectionNote">(実データ)</span></span>
+      <span class="chSectionNote">(単位：円)</span>
     </div>
     <div style="overflow-x:auto;">
-    <table style="border-collapse:collapse; font-size:11.5px; white-space:nowrap;">
+    <table class="chTable">
       <thead>
         <tr>
-          <th rowspan="2" style="padding:6px 10px; border:1px solid #ddd; background:#F4F5F7;">OTA／サイト</th>
-          <th rowspan="2" style="padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">仮想昨年着地<br>(ランダム変動後)</th>
+          <th rowspan="2" class="chTh">OTA／サイト</th>
+          <th rowspan="2" class="chTh chThRef">前年同月実績</th>
           ${weekHeader}
-          <th rowspan="2" style="padding:6px 10px; border:1px solid #ddd; background:#FCEAEA;">仮想昨年着地<br>(ランダム変動後)</th>
+          <th rowspan="2" class="chTh chThRef">前年同月実績</th>
         </tr>
         <tr>${weekSubHeader}</tr>
       </thead>
       <tbody>
         ${weeklyRows}
-        <tr style="font-weight:700; background:#F4F5F7;">
-          <td style="padding:6px 10px; border:1px solid #ddd;">合計</td>
-          <td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(weeklyLandedSum)}</td>
+        <tr class="chTotalRow">
+          <td class="chTd">合計</td>
+          <td class="chTd chTdNum">${fmt(weeklyLandedSum)}</td>
           ${weekTotalCells}
-          <td style="text-align:right; padding:6px 10px; border:1px solid #ddd;">${fmt(weeklyLandedSum)}</td>
+          <td class="chTd chTdNum">${fmt(weeklyLandedSum)}</td>
         </tr>
       </tbody>
     </table>
@@ -2091,9 +2234,9 @@ function formatYenFlexible(v){
   if(abs >= 10000){
     const man = abs/10000;
     const manStr = man>=100 ? Math.round(man).toString() : man.toFixed(1).replace(/\.0$/,'');
-    return `${sign}${manStr}万円`;
+    return `${sign}${manStr}万`;
   }
-  return `${sign}${Math.round(abs).toLocaleString()}円`;
+  return `${sign}${Math.round(abs).toLocaleString()}`;
 }
 
 
@@ -2164,7 +2307,7 @@ function renderCalendar(){
         const addLine = (v, unit, prefix, allowZero)=>{
           if(v==null || (v===0 && !allowZero)) return '';
           const cls = v>0?'up':v<0?'down':'flat';
-          const txt = unit==='室' ? `${v>0?'+':''}${v}室` : (v===0 ? '0円' : formatYenFlexible(v));
+          const txt = unit==='室' ? `${v>0?'+':''}${v}室` : (v===0 ? '0' : formatYenFlexible(v));
           return `<div class="diff ${cls}" style="font-size:9px; white-space:nowrap;">${prefix}${txt}</div>`;
         };
         if(state.calDiffWindow==='both'){
