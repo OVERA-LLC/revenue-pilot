@@ -28,11 +28,13 @@ try {
 const DATA_DIR = path.join(baseDir, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'all_data.json');
 const DATA_GROSS_FILE = path.join(DATA_DIR, 'all_data_gross.json');
+const DATA_CHANNEL_FILE = path.join(DATA_DIR, 'channel_data.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '{}');
 if (!fs.existsSync(DATA_GROSS_FILE)) fs.writeFileSync(DATA_GROSS_FILE, '{}');
+if (!fs.existsSync(DATA_CHANNEL_FILE)) fs.writeFileSync(DATA_CHANNEL_FILE, '{}');
 if (!fs.existsSync(SETTINGS_FILE)) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ capacity: 68 }));
 
 function readJSON(file) {
@@ -138,6 +140,45 @@ app.delete('/api/data-gross', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE /api/data-gross failed:', err);
+    res.status(500).json({ error: 'delete failed', message: err.message });
+  }
+});
+
+// ---- per-OTA-channel dataset (販売先名 breakdown), for チャンネル別分析.
+// Shape: { [channelName]: { [stayISO]: { [snapshotISO]: {rooms, sales} } } } ----
+app.get('/api/data-channel', (req, res) => {
+  res.json(readJSON(DATA_CHANNEL_FILE));
+});
+
+app.post('/api/data-channel', async (req, res) => {
+  const { points } = req.body || {};
+  if (!Array.isArray(points)) return res.status(400).json({ error: 'points array required' });
+
+  try {
+    const data = readJSON(DATA_CHANNEL_FILE);
+    for (const p of points) {
+      if (!p || !p.channel || !p.stayISO || !p.snapshotISO) continue;
+      if (!data[p.channel]) data[p.channel] = {};
+      if (!data[p.channel][p.stayISO]) data[p.channel][p.stayISO] = {};
+      data[p.channel][p.stayISO][p.snapshotISO] = {
+        rooms: Number(p.rooms) || 0,
+        sales: Number(p.sales) || 0
+      };
+    }
+    await queueWrite(DATA_CHANNEL_FILE, data);
+    res.json({ ok: true, merged: points.length });
+  } catch (err) {
+    console.error('POST /api/data-channel failed:', err);
+    res.status(500).json({ error: 'save failed', message: err.message });
+  }
+});
+
+app.delete('/api/data-channel', async (req, res) => {
+  try {
+    await queueWrite(DATA_CHANNEL_FILE, {});
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /api/data-channel failed:', err);
     res.status(500).json({ error: 'delete failed', message: err.message });
   }
 });

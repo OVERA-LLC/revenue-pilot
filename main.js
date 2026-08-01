@@ -78,6 +78,8 @@ async function createWindow() {
     win.webContents.openDevTools();
   }
   await win.loadURL("http://127.0.0.1:3000");
+  // デフォルトの表示倍率を80%に(Ctrl+-を2回押した状態相当)
+  win.webContents.setZoomFactor(0.8);
 }
 
 app.whenReady().then(async () => {
