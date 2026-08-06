@@ -29,12 +29,14 @@ const DATA_DIR = path.join(baseDir, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'all_data.json');
 const DATA_GROSS_FILE = path.join(DATA_DIR, 'all_data_gross.json');
 const DATA_CHANNEL_FILE = path.join(DATA_DIR, 'channel_data.json');
+const DATA_RANK_FILE = path.join(DATA_DIR, 'rank_data.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '{}');
 if (!fs.existsSync(DATA_GROSS_FILE)) fs.writeFileSync(DATA_GROSS_FILE, '{}');
 if (!fs.existsSync(DATA_CHANNEL_FILE)) fs.writeFileSync(DATA_CHANNEL_FILE, '{}');
+if (!fs.existsSync(DATA_RANK_FILE)) fs.writeFileSync(DATA_RANK_FILE, '{}');
 if (!fs.existsSync(SETTINGS_FILE)) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ capacity: 68 }));
 
 function readJSON(file) {
@@ -179,6 +181,41 @@ app.delete('/api/data-channel', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE /api/data-channel failed:', err);
+    res.status(500).json({ error: 'delete failed', message: err.message });
+  }
+});
+
+// ---- 料金ランク(リンカーンの「料金調整」画面から取得)。
+// Shape: { [roomType]: { [dateISO]: rank } } ----
+app.get('/api/rank-data', (req, res) => {
+  res.json(readJSON(DATA_RANK_FILE));
+});
+
+app.post('/api/rank-data', async (req, res) => {
+  const { points } = req.body || {};
+  if (!Array.isArray(points)) return res.status(400).json({ error: 'points array required' });
+
+  try {
+    const data = readJSON(DATA_RANK_FILE);
+    for (const p of points) {
+      if (!p || !p.roomType || !p.dateISO || !p.rank) continue;
+      if (!data[p.roomType]) data[p.roomType] = {};
+      data[p.roomType][p.dateISO] = p.rank;
+    }
+    await queueWrite(DATA_RANK_FILE, data);
+    res.json({ ok: true, merged: points.length });
+  } catch (err) {
+    console.error('POST /api/rank-data failed:', err);
+    res.status(500).json({ error: 'save failed', message: err.message });
+  }
+});
+
+app.delete('/api/rank-data', async (req, res) => {
+  try {
+    await queueWrite(DATA_RANK_FILE, {});
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /api/rank-data failed:', err);
     res.status(500).json({ error: 'delete failed', message: err.message });
   }
 });
