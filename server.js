@@ -186,12 +186,14 @@ app.delete('/api/data-channel', async (req, res) => {
 });
 
 // ---- 料金ランク(リンカーンの「料金調整」画面から取得)。
-// Shape: { [roomType]: { [dateISO]: rank } } ----
-app.get('/api/rank-data', (req, res) => {
+// Shape: { [roomType]: { [dateISO]: rank } }
+// ブックマークレットがリンカーンのページ(別オリジン)から直接送信するため、CORSを許可する必要がある ----
+app.options('/api/rank-data', allowCors);
+app.get('/api/rank-data', allowCors, (req, res) => {
   res.json(readJSON(DATA_RANK_FILE));
 });
 
-app.post('/api/rank-data', async (req, res) => {
+app.post('/api/rank-data', allowCors, async (req, res) => {
   const { points } = req.body || {};
   if (!Array.isArray(points)) return res.status(400).json({ error: 'points array required' });
 
@@ -210,7 +212,7 @@ app.post('/api/rank-data', async (req, res) => {
   }
 });
 
-app.delete('/api/rank-data', async (req, res) => {
+app.delete('/api/rank-data', allowCors, async (req, res) => {
   try {
     await queueWrite(DATA_RANK_FILE, {});
     res.json({ ok: true });
