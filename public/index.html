@@ -193,8 +193,10 @@
     </div>
   </div>
 
-  <div class="card">
-    <h2>カレンダー</h2>
+  <div id="reorderableSections">
+  <div class="card collapsible draggable-section" id="section-calendar" draggable="true">
+    <h2 class="collapsible-head" data-target="calendarCollapseBody"><span><span class="drag-handle">⠿</span> カレンダー</span> <span class="chev">▾</span></h2>
+    <div class="collapsible-body" id="calendarCollapseBody">
     <div class="cal-head">
       <div class="row" style="align-items:center; gap:8px;">
         <button class="ghost" id="prevMonth">‹</button>
@@ -202,13 +204,18 @@
         <button class="ghost" id="nextMonth">›</button>
       </div>
       <div class="row" style="align-items:center; gap:12px;">
-        <div class="row" style="gap:4px;">
-          <button class="ghost diff-toggle active" id="diffWindow7" type="button">7日前比較</button>
-          <button class="ghost diff-toggle" id="diffWindow1" type="button">1日前比較</button>
-          <button class="ghost diff-toggle" id="diffWindowBoth" type="button">1日/7日前</button>
-          <button class="ghost diff-toggle" id="rankToggle" type="button">ランク</button>
+        <div id="diffModeControls" class="row" style="align-items:center; gap:12px;">
+          <div class="row" style="gap:4px;">
+            <button class="ghost diff-toggle active" id="diffWindow7" type="button">7日前比較</button>
+            <button class="ghost diff-toggle" id="diffWindow1" type="button">1日前比較</button>
+            <button class="ghost diff-toggle" id="diffWindowBoth" type="button">1日/7日前</button>
+          </div>
+          <div class="legend">減 <span class="grad-diff"></span> 増</div>
+          <button class="ghost" id="rankToggle" type="button">ランク切替</button>
         </div>
-        <div class="legend" id="calLegendDiff">減 <span class="grad-diff"></span> 増</div>
+        <div id="rankModeControls" class="row" style="align-items:center; gap:12px; display:none;">
+          <button class="ghost active" id="rankToggleBack" type="button">増減切替</button>
+        </div>
       </div>
     </div>
     <div class="cal-3col" id="cal3col">
@@ -226,9 +233,9 @@
       </div>
     </div>
     <div id="calEmpty" class="empty-note" style="display:none;">この期間のデータがまだありません。Excelを取り込んでください。</div>
+    </div>
   </div>
 
-  <div id="reorderableSections">
   <div class="card collapsible draggable-section" id="section-monthly" draggable="true">
     <h2 class="collapsible-head" data-target="mrBody"><span><span class="drag-handle">⠿</span> 月次実績</span> <span class="chev">▾</span></h2>
     <div class="collapsible-body" id="mrBody">
@@ -2254,12 +2261,14 @@ function setDiffWindow(w){
 document.getElementById('diffWindow7').addEventListener('click', ()=>setDiffWindow(7));
 document.getElementById('diffWindow1').addEventListener('click', ()=>setDiffWindow(1));
 document.getElementById('diffWindowBoth').addEventListener('click', ()=>setDiffWindow('both'));
-document.getElementById('rankToggle').addEventListener('click', ()=>{
-  state.showRank = !state.showRank;
-  document.getElementById('rankToggle').classList.toggle('active', state.showRank);
-  document.getElementById('calLegendDiff').style.display = state.showRank ? 'none' : 'flex';
+function setRankMode(on){
+  state.showRank = on;
+  document.getElementById('diffModeControls').style.display = on ? 'none' : 'flex';
+  document.getElementById('rankModeControls').style.display = on ? 'flex' : 'none';
   renderCalendar();
-});
+}
+document.getElementById('rankToggle').addEventListener('click', ()=>setRankMode(true));
+document.getElementById('rankToggleBack').addEventListener('click', ()=>setRankMode(false));
 
 function renderCalendar(){
   if(state.curYear==null || state.curMonth==null){
